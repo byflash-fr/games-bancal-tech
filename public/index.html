@@ -3,50 +3,156 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bancal - Central Screen</title>
+    <title>Bancal — Écran Central</title>
+    <meta name="description" content="Bancal — Party game local coopératif, 2 à 20 joueurs">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/style.css">
+    <style>
+        /* Lobby specific */
+        #lobby-ui {
+            position: absolute; inset: 0;
+            background: rgba(10, 8, 25, 0.97);
+            z-index: 100; color: white;
+            padding: 4vw 5vw;
+            overflow-y: auto;
+            text-align: center;
+            font-family: 'Outfit', sans-serif;
+            display: none;
+        }
+        #lobby-ui h1 {
+            font-size: clamp(2rem, 5vw, 4rem);
+            font-weight: 900;
+            background: linear-gradient(135deg, #7c3aed, #06b6d4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 6px;
+        }
+        #lobby-ui .subtitle { color: rgba(200,200,255,0.7); font-size: clamp(0.9rem,1.8vw,1.3rem); margin-bottom: 36px; }
+        .lobby-cards { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; margin-bottom: 40px; }
+        .lobby-card {
+            flex: 1; min-width: 260px; max-width: 420px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(124,58,237,0.3);
+            border-radius: 20px;
+            padding: 28px 24px;
+            text-align: left;
+        }
+        .lobby-card h2 { font-size: 1.3rem; margin-bottom: 14px; }
+        .lobby-card h2.green { color: #10b981; }
+        .lobby-card h2.blue  { color: #06b6d4; }
+        .lobby-card ul { list-style: none; line-height: 2; font-size: 0.95rem; color: rgba(220,220,255,0.85); }
+        .lobby-card ul li::before { content: '→ '; color: #7c3aed; }
+        .qr-wrap { display: flex; align-items: center; gap: 20px; margin-top: 8px; }
+        #qr-code-img {
+            width: 130px; height: 130px;
+            border-radius: 12px;
+            border: 3px solid #fff;
+            display: none;
+            flex-shrink: 0;
+        }
+        #join-url-text { color: #f1c40f; font-weight: bold; font-size: 1.2rem; }
+        .bottom-bar { margin-top: 32px; }
+        .player-count-display {
+            font-size: clamp(1.2rem, 3vw, 2rem);
+            font-weight: 700;
+            margin-bottom: 24px;
+            color: #f1c40f;
+        }
+        #start-btn {
+            font-family: 'Outfit', sans-serif;
+            font-size: clamp(1rem,2.5vw,1.6rem);
+            font-weight: 900;
+            padding: 18px 60px;
+            background: linear-gradient(135deg, #7c3aed, #5b21b6);
+            color: white;
+            border: none;
+            border-radius: 16px;
+            cursor: pointer;
+            box-shadow: 0 6px 0 #4c1d95, 0 16px 40px rgba(124,58,237,0.4);
+            transition: all 0.1s ease;
+            letter-spacing: 0.05em;
+        }
+        #start-btn:hover { filter: brightness(1.1); }
+        #start-btn:active { transform: translateY(5px); box-shadow: 0 1px 0 #4c1d95; }
+
+        /* Quest type legend */
+        .quest-legend { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 20px; }
+        .quest-tag {
+            background: rgba(124,58,237,0.15);
+            border: 1px solid rgba(124,58,237,0.3);
+            border-radius: 20px;
+            padding: 4px 12px;
+            font-size: 0.78rem;
+            color: rgba(200,200,255,0.8);
+        }
+    </style>
 </head>
 <body class="server-bg">
+
     <div id="ui-container">
-        <h1>Bancal - La Box</h1>
-        <p>Connexion mobile (IP locale, port 3000)</p>
+        <span style="font-size:0.75rem; color:rgba(200,200,255,0.3)">Bancal</span>
     </div>
-    
-    <div id="lobby-ui" style="display: none; position: absolute; inset: 0; background: rgba(20, 20, 25, 0.95); z-index: 100; color: white; padding: 5vw; overflow-y: auto; text-align: center; font-family: 'Segoe UI', sans-serif;">
-        <h1 style="font-size: 3rem; color: #fff;">⏳ Bancal - Accueil & Instructions</h1>
-        <p style="font-size: 1.5rem; margin-top: 10px; color: #ccc;">Le jeu se joue de 2 à 20 joueurs dans la même pièce !</p>
-        
-        <div style="display: flex; justify-content: space-around; margin-top: 40px; text-align: left;">
-            <div style="flex: 1; padding: 20px; background: rgba(255,255,255,0.05); border-radius: 15px; margin-right: 20px;">
-                <h2 style="color: #2ecc71;">🎮 Comment Jouer ?</h2>
-                <ul style="font-size: 1.2rem; margin-left: 20px; line-height: 1.8; margin-top: 10px;">
-                    <li><strong>Le Brouillard :</strong> Vous ne voyez qu'autour de vous. Vous devez communiquer avec les joueurs dans la pièce pour coopérer !</li>
-                    <li><strong>Boutons de groupe :</strong> Certains boutons requièrent X joueurs dessus.</li>
-                    <li><strong>Formes uniques :</strong> Certaines plaques s'activent pour une forme précise (ex: 🔴 Triangle).</li>
-                    <li><strong>Objectif :</strong> Rejoignez tous la SORTIE avant la fin du temps (5 minutes) !</li>
+
+    <!-- LOBBY -->
+    <div id="lobby-ui">
+        <h1>🎮 Bancal — La Box</h1>
+        <p class="subtitle">Jeu coopératif local · 2 à 20 joueurs dans la même pièce !</p>
+
+        <div class="lobby-cards">
+            <!-- How to play -->
+            <div class="lobby-card">
+                <h2 class="green">🕹️ Comment jouer ?</h2>
+                <ul>
+                    <li><strong>Brouillard :</strong> Vous ne voyez qu'autour de vous — communiquez !</li>
+                    <li><strong>Plaques formes :</strong> La forme est dessinée sur la plaque. Seul ce joueur peut l'activer !</li>
+                    <li><strong>Coop :</strong> Certaines plaques demandent X joueurs dessus en même temps</li>
+                    <li><strong>Énigmes :</strong> Approchez la plaque, répondez A=Oui / B=Non sur votre manette</li>
+                    <li><strong>Séquence :</strong> Activez les plaques orange dans le bon ordre : 1→2→3</li>
+                    <li><strong>Collecte :</strong> Ramassez tous les cristaux 💎 éparpillés</li>
+                    <li><strong>Sortie :</strong> Rejoignez TOUS la sortie pour gagner !</li>
                 </ul>
+                <div class="quest-legend">
+                    <span class="quest-tag">🟥 Plaque Carré</span>
+                    <span class="quest-tag">🔷 Plaque Triangle</span>
+                    <span class="quest-tag">🟢 Plaque Cercle</span>
+                    <span class="quest-tag">💡 Énigme</span>
+                    <span class="quest-tag">🤝 Coopération</span>
+                    <span class="quest-tag">💎 Collecte</span>
+                    <span class="quest-tag">🔢 Séquence</span>
+                </div>
             </div>
-            
-            <div style="flex: 1; padding: 20px; background: rgba(255,255,255,0.05); border-radius: 15px;">
-                <h2 style="color: #3498db;">📱 Contrôles (Mobile)</h2>
-                <div style="display: flex; align-items: center; margin-top: 15px;">
-                    <img id="qr-code-img" src="" alt="QR Code" style="width: 150px; height: 150px; border-radius: 10px; border: 4px solid #fff; display: none; margin-right: 20px;" />
+
+            <!-- QR / Mobile -->
+            <div class="lobby-card">
+                <h2 class="blue">📱 Connecter sa manette</h2>
+                <div class="qr-wrap">
+                    <img id="qr-code-img" alt="QR Code">
                     <div>
-                        <p style="font-size: 1.2rem; line-height: 1.4;"><strong>Scannez ce QR Code</strong> ou tapez l'adresse : <br><br>👉 <span id="join-url-text" style="color:#f1c40f; font-weight:bold; font-size: 1.4rem;">...</span></p>
+                        <p style="font-size:1rem; line-height:1.6">
+                            <strong>Scannez le QR Code</strong><br>ou tapez l'adresse :<br><br>
+                            👉 <span id="join-url-text">…</span>
+                        </p>
                     </div>
                 </div>
-                <p style="font-size: 1.1rem; line-height: 1.6; margin-top: 15px;">Connectez-vous via navigateur web, aucun téléchargement n'est requis.<br><br>👉 Utilisez le <strong>Joystick</strong> pour vous déplacer.<br>👉 Appuyez sur <strong>B</strong> pour flasher une lumière et signaler votre position à l'écran central.</p>
+                <p style="margin-top:16px; font-size:0.9rem; line-height:1.7; color:rgba(200,200,255,0.75)">
+                    ✔ Joystick virtuel pour vous déplacer<br>
+                    ✔ Mini-carte pour vous repérer (appuyez pour agrandir)<br>
+                    ✔ Bouton B pour signaler votre position (flash !)<br>
+                    ✔ Répondez aux énigmes directement sur votre téléphone
+                </p>
             </div>
         </div>
-        
-        <div style="margin-top: 50px;">
-            <h3 style="font-size: 2.5rem; color: #f1c40f;">Joueurs connectés : <span id="player-count">0</span></h3>
-            <button onclick="startGame()" style="margin-top: 30px; font-size: 28px; padding: 20px 50px; background: #e74c3c; color: white; border: none; border-radius: 15px; cursor: pointer; font-weight: bold; box-shadow: 0 8px 0 #c0392b; transition: all 0.1s;">Démarrer la partie !</button>
+
+        <div class="bottom-bar">
+            <p class="player-count-display">Joueurs connectés : <span id="player-count">0</span></p>
+            <button id="start-btn" onclick="startGame()">🚀 Lancer la partie !</button>
         </div>
     </div>
-    
+
     <canvas id="gameCanvas"></canvas>
-    
+
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/renderer.js"></script>
 </body>

@@ -3,19 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bancal - Controller</title>
+    <title>Bancal — Manette</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body class="mobile-bg">
-    <div id="controller-ui">
-        <h2>Contrôleur</h2>
-        <div id="joystick-zone"></div>
-        <div class="action-buttons">
-            <button id="btnA" class="game-btn">A (Action)</button>
-            <button id="btnB" class="game-btn">B (Signal)</button>
+
+    <!-- ═══════════════ WAITING SCREEN ═══════════════ -->
+    <div id="waiting-screen">
+        <div class="wait-icon">🎮</div>
+        <h1>Bancal</h1>
+        <p>Connexion en cours…</p>
+        <div class="wait-dots"><span></span><span></span><span></span></div>
+    </div>
+
+    <!-- ═══════════════ CONTROLLER ═══════════════ -->
+    <div id="controller-ui" style="display:none">
+
+        <!-- TOP BAR -->
+        <div id="top-bar">
+            <div id="player-info">
+                <canvas id="player-badge" width="44" height="44"></canvas>
+                <div id="player-text">
+                    <span id="player-name">Joueur ?</span>
+                    <span id="player-shape-label"></span>
+                </div>
+            </div>
+
+            <!-- MINI-MAP -->
+            <div id="minimap-wrap" title="Appuyez pour agrandir">
+                <canvas id="minimap" width="110" height="110"></canvas>
+                <div id="minimap-label">🗺 Carte</div>
+            </div>
+        </div>
+
+        <!-- QUEST INDICATOR -->
+        <div id="quest-indicator">
+            <span id="quest-icon">⬜</span>
+            <span id="quest-text">En attente du début de partie…</span>
+        </div>
+
+        <!-- JOYSTICK AREA -->
+        <div id="joystick-zone">
+            <div id="joystick-ring"></div>
+            <div id="joystick-knob"></div>
+            <div id="joystick-hint">Glissez pour vous déplacer</div>
+        </div>
+
+        <!-- RIDDLE PANEL (hidden by default) -->
+        <div id="riddle-panel" style="display:none">
+            <div id="riddle-question">…</div>
+            <div class="riddle-btns">
+                <button id="btnRiddleYes" class="riddle-btn yes">✅ OUI (A)</button>
+                <button id="btnRiddleNo"  class="riddle-btn no">❌ NON (B)</button>
+            </div>
+        </div>
+
+        <!-- ACTION BUTTONS -->
+        <div id="action-row">
+            <button id="btnA" class="game-btn btn-a">
+                <span class="btn-label">A</span>
+                <span class="btn-sub">Action</span>
+            </button>
+            <button id="btnB" class="game-btn btn-b">
+                <span class="btn-label">B</span>
+                <span class="btn-sub">Signal</span>
+            </button>
+        </div>
+
+    </div>
+
+    <!-- ═══════════════ MAP MODAL ═══════════════ -->
+    <div id="map-modal" style="display:none">
+        <div id="map-modal-inner">
+            <button id="close-map">✕ Fermer</button>
+            <canvas id="bigmap" width="500" height="500"></canvas>
         </div>
     </div>
-    
+
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/controller.js"></script>
 </body>
