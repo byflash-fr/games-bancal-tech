@@ -186,9 +186,13 @@ function cancelGame() {
     socket.emit('cancelGame');
 }
 
-socket.on('gameClosed', () => {
-    alert("Partie annulée !");
-    window.location.href = '/';
+socket.on('gameClosed', (data) => {
+    let msg = (data && data.reason === 'no-players') 
+        ? "La partie est terminée car tous les joueurs sont partis." 
+        : "Partie annulée !";
+    alert(msg).then(() => {
+        window.location.href = '/';
+    });
 });
 
 function draw() {

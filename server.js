@@ -228,7 +228,15 @@ io.on('connection', (socket) => {
                 // Player left
                 if(games[code].players[socket.id]) {
                     delete games[code].players[socket.id];
-                    io.to(code).emit('stateUpdate', games[code]);
+                    
+                    // NEW: Check if no more players left
+                    if (Object.keys(games[code].players).length === 0) {
+                        console.log(`Game ${code} ended because all players left.`);
+                        io.to(code).emit('gameClosed', { reason: 'no-players' });
+                        delete games[code];
+                    } else {
+                        io.to(code).emit('stateUpdate', games[code]);
+                    }
                 }
             }
         }
