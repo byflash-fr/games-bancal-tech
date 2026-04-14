@@ -21,6 +21,104 @@ socket.on('gameClosed', () => {
     window.location.href = '/';
 });
 
+const waitingUI = document.getElementById('waiting-ui');
+const revealUI = document.getElementById('reveal-ui');
+const controllerUI = document.getElementById('controller-ui');
+const charCanvas = document.getElementById('character-canvas');
+const revealCountdown = document.getElementById('reveal-countdown');
+
+let hasRevealed = false;
+let lastState = 'lobby';
+
+function drawCharacter(player) {
+    if (!charCanvas) return;
+    const ctx = charCanvas.getContext('2d');
+    ctx.clearRect(0, 0, charCanvas.width, charCanvas.height);
+    ctx.save();
+    ctx.translate(charCanvas.width / 2, charCanvas.height / 2);
+    ctx.scale(2.5, 2.5);
+    
+    ctx.fillStyle = player.color;
+    
+    if (player.shape === 'square') {
+        ctx.fillRect(-20, -20, 40, 40);
+    } else if (player.shape === 'triangle') {
+        ctx.beginPath();
+        ctx.moveTo(0, -20);
+        ctx.lineTo(20, 20);
+        ctx.lineTo(-20, 20);
+        ctx.closePath();
+        ctx.fill();
+    } else if (player.shape === 'cross') {
+        ctx.fillRect(-20, -6, 40, 12);
+        ctx.fillRect(-6, -20, 12, 40);
+    } else if (player.shape === 'circle') {
+        ctx.beginPath();
+        ctx.arc(0, 0, 20, 0, Math.PI*2);
+        ctx.fill();
+    } else if (player.shape === 'star') {
+        ctx.beginPath();
+        for(let i=0; i<5; i++) {
+            ctx.lineTo(Math.cos((18+i*72)/180*Math.PI)*20, -Math.sin((18+i*72)/180*Math.PI)*20);
+            ctx.lineTo(Math.cos((54+i*72)/180*Math.PI)*10, -Math.sin((54+i*72)/180*Math.PI)*10);
+        }
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    ctx.fillStyle = '#111';
+    ctx.beginPath();
+    ctx.arc(-6, -4, 3, 0, Math.PI*2);
+    ctx.arc(6, -4, 3, 0, Math.PI*2);
+    ctx.fill();
+    
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 4, 6, 0.2, Math.PI - 0.2);
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+socket.on('stateUpdate', (state) => {
+    let myPlayer = state.players[socket.id];
+    
+    if (state.status === 'lobby' || state.status === 'victory' || state.status === 'defeat') {
+        if(state.status === 'lobby') {
+            waitingUI.style.display = 'flex';
+        }
+        revealUI.style.display = 'none';
+        controllerUI.style.display = 'none';
+        hasRevealed = false;
+    } else if (state.status === 'playing') {
+        waitingUI.style.display = 'none';
+        
+        if (!hasRevealed && myPlayer) {
+            hasRevealed = true;
+            revealUI.style.display = 'flex';
+            controllerUI.style.display = 'none';
+            
+            drawCharacter(myPlayer);
+            
+            let count = 5;
+            revealCountdown.innerText = count;
+            let timer = setInterval(() => {
+                count--;
+                revealCountdown.innerText = count;
+                if (count <= 0) {
+                    clearInterval(timer);
+                    revealUI.style.display = 'none';
+                    controllerUI.style.display = 'flex';
+                }
+            }, 1000);
+        } else if (hasRevealed && revealUI.style.display === 'none') {
+            controllerUI.style.display = 'flex';
+        }
+    }
+    
+    lastState = state.status;
+});
 
 const joystickZone = document.getElementById('joystick-zone');
 const btnA = document.getElementById('btnA');

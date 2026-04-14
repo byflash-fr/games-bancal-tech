@@ -109,6 +109,12 @@ io.on('connection', (socket) => {
         }
 
         const game = games[code];
+        
+        if (game.status !== 'lobby') {
+            callback({ success: false, message: 'La partie a déjà commençée !' });
+            return;
+        }
+        
         socket.join(code);
         socket.gameCode = code;
         socket.role = 'player';
@@ -116,6 +122,20 @@ io.on('connection', (socket) => {
         const shapes = ['square', 'triangle', 'circle', 'cross', 'star'];
         const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f1c40f', '#9b59b6'];
         const pCount = Object.keys(game.players).length;
+        
+        let usedCombos = Object.values(game.players).map(p => p.shape + '_' + p.color);
+        let chosenShape = shapes[pCount % shapes.length];
+        let chosenColor = colors[pCount % colors.length];
+        
+        outer: for(let s of shapes) {
+            for(let c of colors) {
+                if(!usedCombos.includes(s + '_' + c)) {
+                    chosenShape = s;
+                    chosenColor = c;
+                    break outer;
+                }
+            }
+        }
         
         game.players[socket.id] = {
             id: socket.id,
@@ -125,8 +145,8 @@ io.on('connection', (socket) => {
             vx: 0,
             vy: 0,
             actionBlink: 0,
-            color: colors[pCount % colors.length],
-            shape: shapes[pCount % shapes.length]
+            color: chosenColor,
+            shape: chosenShape
         };
         
         io.to(code).emit('stateUpdate', game);
