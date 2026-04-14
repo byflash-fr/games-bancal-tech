@@ -6,69 +6,27 @@
     <title>Bancal - Accueil</title>
     <link rel="stylesheet" href="/css/style.css">
     <script src="https://cloud.byflash.fr/kilez.js"></script>
-    <style>
-        body { 
-            margin: 0; padding: 0; 
-            background: linear-gradient(135deg, #0d0f1a, #1a1b3a); 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            display: flex; align-items: center; justify-content: center; 
-            min-height: 100vh; color: #fff; text-align: center; 
-        }
-        .card { 
-            background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); 
-            padding: 40px; border-radius: 20px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); 
-            border: 1px solid rgba(255, 255, 255, 0.1); width: 90%; max-width: 400px; 
-            animation: fadeIn 0.5s ease-out forwards;
-        }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        h1 { font-size: 3.5rem; margin-bottom: 10px; color: #f1c40f; text-shadow: 0 4px 15px rgba(241, 196, 15, 0.4); letter-spacing: 2px;}
-        h2 { font-size: 1.2rem; font-weight: normal; margin-bottom: 30px; color: #aaa; }
-        .input-group { margin-bottom: 20px; text-align: left; }
-        label { display: block; margin-bottom: 8px; font-weight: bold; color: #ddd; letter-spacing: 0.5px;}
-        input[type="text"] { 
-            width: 100%; padding: 15px; border-radius: 10px; border: none; 
-            background: rgba(0, 0, 0, 0.3); color: #fff; font-size: 1.1rem; 
-            border: 1px solid rgba(255, 255, 255, 0.2); outline: none; 
-            transition: 0.3s; box-sizing: border-box; 
-        }
-        input[type="text"]:focus { border-color: #3498db; background: rgba(0, 0, 0, 0.5); box-shadow: 0 0 15px rgba(52, 152, 219, 0.3); }
-        .btn { 
-            display: inline-block; width: 100%; padding: 15px; border-radius: 10px; 
-            border: none; font-size: 1.2rem; font-weight: bold; cursor: pointer; 
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
-            margin-top: 10px; box-sizing: border-box; text-decoration: none;
-            letter-spacing: 1px;
-        }
-        .btn-create { background: linear-gradient(135deg, #e74c3c, #c0392b); color: #fff; box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4); }
-        .btn-create:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(231, 76, 60, 0.6); }
-        .btn-join { background: linear-gradient(135deg, #3498db, #2980b9); color: #fff; box-shadow: 0 4px 15px rgba(52, 152, 219, 0.4); }
-        .btn-join:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(52, 152, 219, 0.6); }
-        .divider { display: flex; align-items: center; margin: 25px 0; color: #888; }
-        .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: rgba(255, 255, 255, 0.1); }
-        .divider span { padding: 0 10px; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; }
-        #error-msg { color: #ff6b6b; margin-top: 15px; font-weight: bold; display: none; background: rgba(255, 107, 107, 0.1); padding: 10px; border-radius: 8px;}
-    </style>
 </head>
-<body>
-    <div class="card">
+<body class="flex-center">
+    <div class="glass-card animate-fade-in">
         <h1>Bancal</h1>
         <h2>Coopération à l'aveugle</h2>
         
         <div class="input-group">
             <label for="pseudo">Ton Pseudo</label>
-            <input type="text" id="pseudo" placeholder="Ex: Jean" maxlength="15" />
+            <input type="text" id="pseudo" placeholder="Ex: Jean" maxlength="15" autocomplete="off" />
         </div>
 
-        <button class="btn btn-create" onclick="createGame()">Créer une partie</button>
+        <button class="btn btn-primary" onclick="createGame()">Créer une partie</button>
         
         <div class="divider"><span>OU</span></div>
         
         <div class="input-group">
             <label for="gameCode">Code de la Partie</label>
-            <input type="text" id="gameCode" placeholder="ABCD" maxlength="4" style="text-transform: uppercase; text-align: center; font-size: 1.8rem; letter-spacing: 8px; font-weight: bold;" />
+            <input type="text" id="gameCode" class="code-input" placeholder="----" maxlength="4" autocomplete="off" />
         </div>
         
-        <button class="btn btn-join" onclick="joinGame()">Rejoindre</button>
+        <button class="btn btn-outline" onclick="joinGame()">Rejoindre</button>
         
         <div id="error-msg"></div>
     </div>
@@ -134,3 +92,4 @@
     <script>logConnection('game-bancal');</script>
 </body>
 </html>
+

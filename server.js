@@ -115,16 +115,29 @@ io.on('connection', (socket) => {
             callback({ success: false, message: 'La partie a déjà commençée !' });
             return;
         }
+
+        // Handle duplicate pseudo from same location (IP)
+        const clientIp = socket.handshake.address;
+        for (const [id, player] of Object.entries(game.players)) {
+            if (player.pseudo === data.pseudo) {
+                // If it's the same IP, we assume it's a reconnection/refresh
+                // We remove the old one to let the new one in
+                delete game.players[id];
+                console.log(`Removed duplicate player ${player.pseudo} (old socket: ${id})`);
+            }
+        }
         
         socket.join(code);
         socket.gameCode = code;
         socket.role = 'player';
+        socket.clientIp = clientIp; // Store for future reference if needed
         
         const shapes = ['square', 'triangle', 'circle', 'cross', 'star'];
         const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f1c40f', '#9b59b6'];
         const pCount = Object.keys(game.players).length;
         
         let usedCombos = Object.values(game.players).map(p => p.shape + '_' + p.color);
+
         let chosenShape = shapes[pCount % shapes.length];
         let chosenColor = colors[pCount % colors.length];
         

@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="fr">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,66 +7,60 @@
     <link rel="stylesheet" href="/css/style.css">
     <script src="https://cloud.byflash.fr/kilez.js"></script>
 </head>
-
 <body class="server-bg">
     <div id="ui-container">
-        <h1>Bancal - La Box</h1>
-        <p>Connexion mobile (IP locale, port 3000)</p>
+        <h1>Bancal</h1>
     </div>
 
-    <div id="lobby-ui"
-        style="display: none; position: absolute; inset: 0; background: rgba(20, 20, 25, 0.95); z-index: 100; color: white; overflow-y: auto; text-align: center; font-family: 'Segoe UI', sans-serif;">
-        <div style="display: flex; height: 100vh; flex-direction: row;">
+    <div id="lobby-ui" class="lobby-container" style="display: none;">
+        <!-- LEFT SIDE: Players -->
+        <div class="lobby-side lobby-left">
+            <h1>Joueurs <span id="player-count" class="player-count-badge">0</span></h1>
 
-            <!-- LEFT SIDE: Players -->
-            <div
-                style="flex: 1; padding: 40px; border-right: 2px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; text-align: left;">
-                <h1 style="font-size: 3rem; color: #f1c40f; margin-bottom: 20px;">Joueurs <span id="player-count"
-                        style="color: #fff; background: #e74c3c; border-radius: 10px; padding: 0 15px; font-size: 2.5rem; vertical-align: middle;">0</span>
-                </h1>
+            <div class="player-list-container">
+                <ul id="players-list">
+                    <!-- Players injected via JS -->
+                </ul>
+            </div>
+        </div>
 
-                <div
-                    style="flex: 1; background: rgba(255,255,255,0.05); border-radius: 15px; padding: 20px; overflow-y: auto;">
-                    <ul id="players-list"
-                        style="list-style: none; padding: 0; margin: 0; font-size: 1.8rem; line-height: 2;">
-                        <!-- Players injected via JS -->
-                    </ul>
-                </div>
+        <!-- RIGHT SIDE: Code & QR -->
+        <div class="lobby-side lobby-right">
+
+            <h2>Code de la Partie</h2>
+            <h1 id="game-code-display">----</h1>
+
+            <div class="qr-container">
+                <img id="qr-code-img" src="" alt="QR Code" style="width: 250px; height: 250px; display: none;" />
             </div>
 
-            <!-- RIGHT SIDE: Code & QR -->
-            <div
-                style="flex: 1; padding: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                <h1 style="font-size: 2rem; color: #ccc;">Code de la Partie</h1>
-                <h2 id="game-code-display"
-                    style="font-size: 6rem; letter-spacing: 15px; color: #3498db; margin: 10px 0; font-family: monospace;">
-                    ----</h2>
+            <p class="join-instruction">
+                Scannez pour rejoindre ou allez sur :
+                <span id="join-url-text" class="join-url">...</span>
+            </p>
 
-                <div
-                    style="background: white; padding: 10px; border-radius: 15px; margin: 30px 0; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-                    <img id="qr-code-img" src="" alt="QR Code" style="width: 250px; height: 250px; display: none;" />
-                </div>
-
-                <p style="font-size: 1.5rem; margin-bottom: 40px;">Scannez pour rejoindre ou allez sur :<br><strong
-                        id="join-url-text" style="color:#e74c3c; font-size: 1.8rem;">...</strong></p>
-
-                <button onclick="startGame()"
-                    style="font-size: 32px; padding: 25px 60px; background: #2ecc71; color: white; border: none; border-radius: 20px; cursor: pointer; font-weight: bold; box-shadow: 0 10px 0 #27ae60; transition: transform 0.1s, box-shadow 0.1s; margin-bottom: 20px;">Démarrer
-                    la partie !</button>
-                    
-                <button onclick="cancelGame()"
-                    style="font-size: 24px; padding: 15px 40px; background: #e74c3c; color: white; border: none; border-radius: 15px; cursor: pointer; font-weight: bold; box-shadow: 0 5px 0 #c0392b; transition: transform 0.1s, box-shadow 0.1s;">Annuler la partie</button>
+            <div class="lobby-buttons">
+                <button class="btn btn-primary" onclick="startGame()">Démarrer la partie</button>
+                <button class="btn btn-outline" onclick="cancelGame()">Annuler</button>
             </div>
+        </div>
+    </div>
 
+    <!-- VICTORY UI -->
+    <div id="victory-ui" class="lobby-container flex-center" style="display: none; flex-direction: column;">
+        <h1 style="font-size: 8rem; margin-bottom: 40px;">VICTOIRE</h1>
+        <div class="lobby-buttons">
+            <button class="btn btn-primary" onclick="startGame()">Recommencer</button>
+            <button class="btn btn-outline" onclick="cancelGame()">Quitter</button>
         </div>
     </div>
 
     <canvas id="gameCanvas"></canvas>
 
-    <!-- Script tags at the bottom to ensure DOM is fully loaded -->
+
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/renderer.js?v=2"></script>
     <script src="https://cloud.byflash.fr/affenbrotbaum.js"></script>
     <script>logConnection('game-bancal');</script>
 </body>
-</html>
+</html>
