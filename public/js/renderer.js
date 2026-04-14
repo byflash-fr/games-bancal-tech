@@ -28,6 +28,30 @@ const qrCodeImg = document.getElementById('qr-code-img');
 const gameCodeDisplay = document.getElementById('game-code-display');
 const playersList = document.getElementById('players-list');
 
+const backgroundMusic = new Audio('/assets/music.mp3');
+backgroundMusic.loop = true;
+backgroundMusic.preload = 'auto';
+backgroundMusic.volume = 0.35;
+
+function tryPlayBackgroundMusic() {
+    if (!backgroundMusic.paused) return;
+    backgroundMusic.play().catch(() => {
+        // Autoplay can be blocked until first user interaction.
+    });
+}
+
+const unlockMusicOnFirstInteraction = () => {
+    tryPlayBackgroundMusic();
+    document.removeEventListener('pointerdown', unlockMusicOnFirstInteraction);
+    document.removeEventListener('keydown', unlockMusicOnFirstInteraction);
+    document.removeEventListener('touchstart', unlockMusicOnFirstInteraction);
+};
+
+tryPlayBackgroundMusic();
+document.addEventListener('pointerdown', unlockMusicOnFirstInteraction, { passive: true });
+document.addEventListener('keydown', unlockMusicOnFirstInteraction);
+document.addEventListener('touchstart', unlockMusicOnFirstInteraction, { passive: true });
+
 socket.on('stateUpdate', (state) => {
     gameState = state;
     
@@ -55,6 +79,7 @@ socket.on('stateUpdate', (state) => {
 });
 
 function startGame() {
+    tryPlayBackgroundMusic();
     socket.emit('startGame');
 }
 
