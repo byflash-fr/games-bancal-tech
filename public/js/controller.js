@@ -5,20 +5,26 @@ const code = urlParams.get('code');
 const pseudo = urlParams.get('pseudo') || 'Joueur Mobile';
 
 if(!code) {
-    alert("Code manquant ! Retour à l'accueil.");
-    window.location.href = '/';
+    alert("Code manquant ! Retour à l'accueil.").then(() => {
+        window.location.href = '/';
+    });
 } else {
-    socket.emit('joinGame', { code, pseudo }, (response) => {
+    socket.emit('joinGame', { code, pseudo }, async (response) => {
         if(!response.success) {
-            alert(response.message);
+            await alert(response.message);
             window.location.href = '/';
         }
     });
 }
 
-socket.on('gameClosed', () => {
-    alert("La partie a été fermée par l'hôte.");
-    window.location.href = '/';
+socket.on('gameClosed', (data) => {
+    let msg = "La partie a été fermée par l'hôte.";
+    if (data && data.reason === 'no-players') {
+        msg = "La partie est terminée car plus aucun joueur n'était présent.";
+    }
+    alert(msg).then(() => {
+        window.location.href = '/';
+    });
 });
 
 const waitingUI = document.getElementById('waiting-ui');
@@ -184,8 +190,8 @@ joystickZone.addEventListener('pointerleave', () => {
 btnA.addEventListener('pointerdown', () => socket.emit('input', { type: 'action', button: 'A' }));
 btnB.addEventListener('pointerdown', () => socket.emit('input', { type: 'action', button: 'B' }));
 
-function quitGame() {
-    if(confirm("Voulez-vous vraiment quitter la partie ?")) {
+async function quitGame() {
+    if(await confirm("Voulez-vous vraiment quitter la partie ?")) {
         window.location.href = '/';
     }
 }
