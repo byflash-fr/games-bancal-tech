@@ -64,7 +64,7 @@ function generateGameCode() {
     return code;
 }
 
-const TICK_RATE = 1000 / 60; // 60 FPS
+const TICK_RATE = 1000 / 165; // 165 FPS
 
 io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
