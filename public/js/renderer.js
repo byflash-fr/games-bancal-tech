@@ -31,7 +31,7 @@ const playersList = document.getElementById('players-list');
 socket.on('stateUpdate', (state) => {
     gameState = state;
     
-    if (state.status !== 'playing') {
+    if (state.status === 'lobby' || state.status === 'victory' || state.status === 'defeat') {
         if (lobbyUI) lobbyUI.style.display = 'block';
         if (pCountSpan) pCountSpan.innerText = Object.keys(state.players).length;
         if (gameCodeDisplay) gameCodeDisplay.innerText = state.code;
