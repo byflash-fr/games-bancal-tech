@@ -161,9 +161,18 @@ io.on('connection', (socket) => {
             if (game.status === 'lobby' || game.status === 'defeat' || game.status === 'victory') {
                 game.status = 'starting';
                 game.countdown = 5;
-                game.level = gameLogic.generateLevel(Math.max(2, Object.keys(game.players).length));
+                game.level = gameLogic.generateLevel(Math.max(1, Object.keys(game.players).length));
                 io.to(code).emit('stateUpdate', game);
             }
+        }
+    });
+
+    socket.on('cancelGame', () => {
+        const code = socket.gameCode;
+        if(code && games[code] && socket.role === 'host') {
+            io.to(code).emit('gameClosed');
+            delete games[code];
+            console.log(`Game ${code} cancelled by host.`);
         }
     });
 

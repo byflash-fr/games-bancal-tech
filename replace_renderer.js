@@ -3,37 +3,77 @@ const fs = require('fs');
 const path = 'public/js/renderer.js';
 let content = fs.readFileSync(path, 'utf8');
 
-const anchor = 'let camera = { x: 0, y: 0 };';
-const index = content.indexOf(anchor);
+// The anchor was modified in our previous replace
+const anchor = 'let playerCameras = {};';
+const anchorFallback = 'let camera = { x: 0, y: 0 };';
+let index = content.indexOf(anchor);
+if(index === -1) {
+    index = content.indexOf(anchorFallback);
+}
 
 if (index !== -1) {
+    const keepContent = content.substring(0, index);
     const newAddition = `
-let playerCameras = {}; // {id: {x,y}}
+let camera = { x: 0, y: 0, scale: 1 };
 const fogCanvas = document.createElement('canvas');
 const fogCtx = fogCanvas.getContext('2d', { willReadFrequently: true });
 
-function renderWorldForPlayer(pId, viewportBox) {
-    let p = gameState.players[pId];
-    if(!playerCameras[pId]) playerCameras[pId] = { x: p.x, y: p.y };
-    let cam = playerCameras[pId];
-    
-    cam.x += (p.x - cam.x) * 0.1;
-    cam.y += (p.y - cam.y) * 0.1;
+function cancelGame() {
+    socket.emit('cancelGame');
+}
 
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(viewportBox.x, viewportBox.y, viewportBox.w, viewportBox.h);
-    ctx.clip();
-    
+socket.on('gameClosed', () => {
+    alert("Partie annulée !");
+    window.location.href = '/';
+});
+
+function draw() {
     ctx.fillStyle = '#1e1e24';
-    ctx.fillRect(viewportBox.x, viewportBox.y, viewportBox.w, viewportBox.h);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    if(!gameState.level || gameState.status === 'lobby') {
+        requestAnimationFrame(draw);
+        return;
+    }
+
+    let pIds = Object.keys(gameState.players);
+    let pCount = pIds.length;
+    
+    let targetX = gameState.level.width / 2;
+    let targetY = gameState.level.height / 2;
+    let targetScale = 1.0;
+
+    if (pCount > 0) {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for(let id of pIds) {
+            let p = gameState.players[id];
+            if(p.x < minX) minX = p.x;
+            if(p.y < minY) minY = p.y;
+            if(p.x > maxX) maxX = p.x;
+            if(p.y > maxY) maxY = p.y;
+        }
+        
+        targetX = (minX + maxX) / 2;
+        targetY = (minY + maxY) / 2;
+        
+        let bw = (maxX - minX) + 600; // padding around players
+        let bh = (maxY - minY) + 600; 
+        
+        targetScale = Math.min(canvas.width / bw, canvas.height / bh);
+        if(targetScale > 1.2) targetScale = 1.2;
+        if(targetScale < 0.2) targetScale = 0.2;
+    }
+
+    camera.x += (targetX - camera.x) * 0.1;
+    camera.y += (targetY - camera.y) * 0.1;
+    camera.scale += (targetScale - camera.scale) * 0.1;
 
     ctx.save();
-    let tx = viewportBox.x + viewportBox.w/2 - cam.x;
-    let ty = viewportBox.y + viewportBox.h/2 - cam.y;
-    ctx.translate(tx, ty);
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.scale(camera.scale, camera.scale);
+    ctx.translate(-camera.x, -camera.y);
 
-    // Floor Grid
+    // Grid
     ctx.strokeStyle = '#2b2b36';
     ctx.lineWidth = 2;
     for(let i=0; i<=gameState.level.width; i+=100) {
@@ -43,7 +83,6 @@ function renderWorldForPlayer(pId, viewportBox) {
         ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(gameState.level.width, i); ctx.stroke();
     }
 
-    // Exit
     ctx.fillStyle = gameState.level.exit.active ? '#2ecc71' : '#7f8c8d';
     ctx.beginPath();
     ctx.arc(gameState.level.exit.x, gameState.level.exit.y, gameState.level.exit.r, 0, Math.PI*2);
@@ -52,7 +91,6 @@ function renderWorldForPlayer(pId, viewportBox) {
     ctx.font = '24px bold Arial';
     ctx.fillText("SORTIE", gameState.level.exit.x - 45, gameState.level.exit.y + 8);
 
-    // Buttons
     for(let b of gameState.level.buttons) {
         ctx.fillStyle = b.pressed ? '#2ecc71' : b.color;
         ctx.beginPath();
@@ -71,7 +109,6 @@ function renderWorldForPlayer(pId, viewportBox) {
         }
     }
 
-    // Coins
     for(let c of gameState.level.coins) {
         if(!c.collected) {
             ctx.fillStyle = '#f1c40f';
@@ -84,14 +121,20 @@ function renderWorldForPlayer(pId, viewportBox) {
         }
     }
 
-    // Players
     for (const id in gameState.players) {
         const player = gameState.players[id];
-        ctx.fillStyle = player.color;
-        
         ctx.save();
         ctx.translate(player.x, player.y);
         
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 24px Arial';
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#000';
+        ctx.strokeText(player.pseudo, 0, -35);
+        ctx.fillText(player.pseudo, 0, -35);
+        
+        ctx.fillStyle = player.color;
         if(player.actionBlink > 0) {
             ctx.shadowColor = '#fff';
             ctx.shadowBlur = Math.min(20, player.actionBlink * 3);
@@ -114,7 +157,6 @@ function renderWorldForPlayer(pId, viewportBox) {
             ctx.closePath(); ctx.fill();
         }
 
-        // Draw funny face
         ctx.fillStyle = '#111';
         ctx.beginPath();
         ctx.arc(-6, -4, 3, 0, Math.PI*2);
@@ -130,7 +172,6 @@ function renderWorldForPlayer(pId, viewportBox) {
         ctx.restore();
     }
 
-    // Fog of War
     if(fogCanvas.width !== canvas.width || fogCanvas.height !== canvas.height) {
         fogCanvas.width = canvas.width;
         fogCanvas.height = canvas.height;
@@ -139,7 +180,7 @@ function renderWorldForPlayer(pId, viewportBox) {
     fogCtx.globalCompositeOperation = 'source-over';
     fogCtx.clearRect(0,0, fogCanvas.width, fogCanvas.height);
     fogCtx.fillStyle = '#050510'; 
-    fogCtx.fillRect(viewportBox.x, viewportBox.y, viewportBox.w, viewportBox.h);
+    fogCtx.fillRect(0, 0, fogCanvas.width, fogCanvas.height);
     
     fogCtx.globalCompositeOperation = 'destination-out';
     
@@ -161,34 +202,44 @@ function renderWorldForPlayer(pId, viewportBox) {
         segments.push({a:{x:w.x, y:w.y+w.h}, b:{x:w.x, y:w.y}});
     }
 
-    let poly = calculateVisibilityPolygon({x: p.x, y: p.y}, segments);
-    
-    if(poly.length > 0) {
-        fogCtx.save();
-        fogCtx.translate(tx, ty);
-        fogCtx.beginPath();
-        fogCtx.moveTo(poly[0].x, poly[0].y);
-        for(let i=1; i<poly.length; i++) {
-            fogCtx.lineTo(poly[i].x, poly[i].y);
+    for (const id in gameState.players) {
+        let p = gameState.players[id];
+        let poly = calculateVisibilityPolygon({x: p.x, y: p.y}, segments);
+        
+        if(poly.length > 0) {
+            fogCtx.save();
+            fogCtx.translate(canvas.width / 2, canvas.height / 2);
+            fogCtx.scale(camera.scale, camera.scale);
+            fogCtx.translate(-camera.x, -camera.y);
+            
+            fogCtx.beginPath();
+            fogCtx.moveTo(poly[0].x, poly[0].y);
+            for(let i=1; i<poly.length; i++) {
+                fogCtx.lineTo(poly[i].x, poly[i].y);
+            }
+            fogCtx.closePath();
+            
+            let limitRadius = 250;
+            let gradient = fogCtx.createRadialGradient(p.x, p.y, limitRadius * 0.2, p.x, p.y, limitRadius);
+            gradient.addColorStop(0, 'rgba(0,0,0,1)');
+            gradient.addColorStop(0.8, 'rgba(0,0,0,0.3)');
+            gradient.addColorStop(1, 'rgba(0,0,0,0)');
+            
+            fogCtx.fillStyle = gradient;
+            fogCtx.fill();
+            fogCtx.restore();
         }
-        fogCtx.closePath();
-        
-        let gradient = fogCtx.createRadialGradient(p.x, p.y, 20, p.x, p.y, 600);
-        gradient.addColorStop(0, 'rgba(0,0,0,1)');
-        gradient.addColorStop(1, 'rgba(0,0,0,0)');
-        
-        fogCtx.fillStyle = gradient;
-        fogCtx.fill();
-        fogCtx.restore();
     }
 
     ctx.restore(); 
+    ctx.globalAlpha = 1.0;
     ctx.drawImage(fogCanvas, 0, 0);
     
     ctx.save();
-    ctx.translate(tx, ty);
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.scale(camera.scale, camera.scale);
+    ctx.translate(-camera.x, -camera.y);
     
-    // Walls
     ctx.fillStyle = '#111';
     for(let w of gameState.level.walls) {
         ctx.fillRect(w.x, w.y, w.w, w.h);
@@ -197,7 +248,6 @@ function renderWorldForPlayer(pId, viewportBox) {
         ctx.strokeRect(w.x, w.y, w.w, w.h);
     }
 
-    // Doors
     ctx.fillStyle = '#e74c3c';
     for(let d of gameState.level.doors) {
         if(!d.open) {
@@ -209,37 +259,6 @@ function renderWorldForPlayer(pId, viewportBox) {
 
     ctx.restore();
     
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 4;
-    ctx.strokeRect(viewportBox.x, viewportBox.y, viewportBox.w, viewportBox.h);
-    
-    ctx.restore();
-}
-
-function draw() {
-    ctx.fillStyle = '#1e1e24';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    if(!gameState.level || gameState.status === 'lobby') {
-        requestAnimationFrame(draw);
-        return;
-    }
-
-    let pIds = Object.keys(gameState.players);
-    let pCount = pIds.length;
-    
-    if (pCount > 0) {
-        let cols = Math.ceil(Math.sqrt(pCount));
-        let rows = Math.ceil(pCount / cols);
-        let w = canvas.width / cols;
-        let h = canvas.height / rows;
-        for(let i=0; i<pCount; i++) {
-            let c = i % cols;
-            let r = Math.floor(i / cols);
-            renderWorldForPlayer(pIds[i], {x:c*w, y:r*h, w:w, h:h});
-        }
-    }
-
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 24px Arial';
     ctx.textAlign = 'left';
@@ -270,7 +289,6 @@ function draw() {
     }
     
     if(gameState.status === 'playing' && gameState.level.quests) {
-        // Position quests below the number of players
         ctx.fillStyle = 'rgba(20, 20, 25, 0.8)';
         ctx.beginPath();
         ctx.roundRect(20, 60, 400, 200, 15);
@@ -320,9 +338,8 @@ function draw() {
 draw();
 `;
     
-    const keepContent = content.substring(0, index);
     fs.writeFileSync(path, keepContent + newAddition);
-    console.log('Successfully updated renderer.js');
+    console.log('Successfully updated renderer.js with single screen dynamic zoom');
 } else {
     console.log('Anchor not found');
 }
