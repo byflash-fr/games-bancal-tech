@@ -7,55 +7,89 @@
     <link rel="stylesheet" href="/css/style.css">
     <script src="https://cloud.byflash.fr/kilez.js"></script>
 </head>
-<body class="server-bg">
-    <!-- Noble Loader -->
-    <div id="global-loader">
-        <div class="loader-ring"></div>
-        <div class="loader-text">Chargement de l'univers</div>
+<body class="flex-center">
+    <div class="glass-card animate-fade-in">
+        <h1>Bancal</h1>
+        <h2>Coopération à l'aveugle</h2>
+        
+        <div class="input-group">
+            <label for="pseudo">Ton Pseudo</label>
+            <input type="text" id="pseudo" placeholder="Ex: Jean" maxlength="15" autocomplete="off" />
+        </div>
+
+        <button class="btn btn-primary" onclick="createGame()">Créer une partie</button>
+        
+        <div class="divider"><span>OU</span></div>
+        
+        <div class="input-group">
+            <label for="gameCode">Code de la Partie</label>
+            <input type="text" id="gameCode" class="code-input" placeholder="----" maxlength="4" autocomplete="off" />
+        </div>
+        
+        <button class="btn btn-outline" onclick="joinGame()">Rejoindre</button>
+        
+        <div id="error-msg"></div>
     </div>
 
-    <main class="landing-hero glass-panel">
-        <h1>Bancal</h1>
-        <p>Une épopée coopérative où chaque mouvement compte.</p>
-
-        <section id="auth-panel">
-            <div class="form-group">
-                <label for="pseudo">Votre Identité</label>
-                <input type="text" id="pseudo" placeholder="Ex: Messire Paul" maxlength="15">
-            </div>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                <button onclick="createGame()" class="btn-noble">
-                    Créer Salle
-                </button>
-                <div style="display: flex; gap: 8px;">
-                    <input type="text" id="game-code" placeholder="CODE" style="width: 80px; text-align: center; text-transform: uppercase;">
-                    <button onclick="joinGame()" class="btn-noble btn-outline" style="flex: 1;">
-                        Rejoindre
-                    </button>
-                </div>
-            </div>
-        </section>
-    </main>
-
+    <script src="/socket.io/socket.io.js"></script>
     <script>
-        window.addEventListener('load', () => {
-            setTimeout(() => {
-                document.body.classList.add('loaded');
-            }, 800);
-        });
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlCode = urlParams.get('code');
+        if(urlCode) {
+            document.getElementById('gameCode').value = urlCode.toUpperCase();
+        }
+
+        const savedPseudo = localStorage.getItem('bancal_pseudo');
+        if(savedPseudo) {
+            document.getElementById('pseudo').value = savedPseudo;
+        }
+
+        function showError(msg) {
+            const el = document.getElementById('error-msg');
+            el.innerText = msg;
+            el.style.display = 'block';
+            setTimeout(() => el.style.display='none', 4000);
+        }
+
+        function getPseudo() {
+            const pseudo = document.getElementById('pseudo').value.trim();
+            if(!pseudo) {
+                showError("Il te faut un pseudo !");
+                return null;
+            }
+            localStorage.setItem('bancal_pseudo', pseudo);
+            return pseudo;
+        }
 
         function createGame() {
-            const pseudo = document.getElementById('pseudo').value || "Anonyme";
+            const pseudo = getPseudo();
+            if(!pseudo) return;
             window.location.href = `/host.html?pseudo=${encodeURIComponent(pseudo)}`;
         }
 
         function joinGame() {
-            const pseudo = document.getElementById('pseudo').value || "Anonyme";
-            const code = document.getElementById('game-code').value.toUpperCase();
-            if(!code) return alert("Veuillez saisir un code");
-            window.location.href = `/mobile.html?code=${code}&pseudo=${encodeURIComponent(pseudo)}`;
+            const pseudo = getPseudo();
+            if(!pseudo) return;
+            
+            const code = document.getElementById('gameCode').value.trim().toUpperCase();
+            if(code.length !== 4) {
+                showError("Le code doit faire 4 caractères !");
+                return;
+            }
+            
+            const socket = io();
+            socket.emit('joinGame', { code, pseudo }, (response) => {
+                if(response.success) {
+                    window.location.href = `/mobile.html?code=${encodeURIComponent(code)}&pseudo=${encodeURIComponent(pseudo)}`;
+                } else {
+                    showError(response.message || "Erreur de connexion.");
+                    socket.disconnect();
+                }
+            });
         }
     </script>
+    <script src="https://cloud.byflash.fr/affenbrotbaum.js"></script>
+    <script>logConnection('game-bancal');</script>
 </body>
 </html>
+

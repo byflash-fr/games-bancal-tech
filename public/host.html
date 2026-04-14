@@ -6,67 +6,41 @@
     <title>Bancal - Central Screen</title>
     <link rel="stylesheet" href="/css/style.css">
     <script src="https://cloud.byflash.fr/kilez.js"></script>
-    <style>
-        #ui-container {
-            background: rgba(15, 23, 42, 0.8);
-            padding: 10px 20px;
-            border-radius: 0 0 15px 0;
-            border: 1px solid var(--glass-border);
-            border-top: none;
-            border-left: none;
-        }
-        #ui-container h1 { font-size: 1.2rem; color: var(--accent-gold); }
-        #ui-container p { font-size: 0.8rem; color: var(--text-muted); }
-    </style>
 </head>
 <body class="server-bg">
-    <!-- Loader -->
-    <div id="global-loader">
-        <div class="loader-ring"></div>
-        <div class="loader-text">Initialisation de la salle</div>
-    </div>
-
     <div id="ui-container">
-        <h1>BANCAL</h1>
-        <p>Console Centralisée</p>
+        <h1>Bancal</h1>
     </div>
 
-    <div id="lobby-ui" style="display: none; position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: var(--bg-deep);">
-        <div class="lobby-grid">
-            <!-- Left: Players List -->
-            <div class="glass-panel" style="padding: 40px; display: flex; flex-direction: column;">
-                <h2 style="font-size: 2.5rem; margin-bottom: 30px;">
-                    L'Équipage <span id="player-count" style="background: var(--accent-gold); color: var(--bg-deep); border-radius: 8px; padding: 2px 12px; font-family: 'Inter'; font-size: 1.5rem; font-weight: 600;">0</span>
-                </h2>
-                <div style="flex: 1; overflow-y: auto;">
-                    <ul id="players-list" style="list-style: none;">
-                        <!-- Injected -->
-                    </ul>
-                </div>
+    <div id="lobby-ui" class="lobby-container" style="display: none;">
+        <!-- LEFT SIDE: Players -->
+        <div class="lobby-side lobby-left">
+            <h1>Joueurs <span id="player-count" class="player-count-badge">0</span></h1>
+
+            <div class="player-list-container">
+                <ul id="players-list">
+                    <!-- Players injected via JS -->
+                </ul>
+            </div>
+        </div>
+
+        <!-- RIGHT SIDE: Code & QR -->
+        <div class="lobby-side lobby-right">
+            <h2>Code de la Partie</h2>
+            <h1 id="game-code-display">----</h1>
+
+            <div class="qr-container">
+                <img id="qr-code-img" src="" alt="QR Code" style="width: 250px; height: 250px; display: none;" />
             </div>
 
-            <!-- Right: Connection -->
-            <div class="glass-panel" style="padding: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
-                <span style="color: var(--text-muted); text-transform: uppercase; letter-spacing: 2px; font-size: 0.8rem;">Code d'accès</span>
-                <h3 id="game-code-display" style="font-size: 5rem; color: var(--accent-gold); margin: 10px 0; letter-spacing: 10px;">----</h3>
-                
-                <div style="background: white; padding: 15px; border-radius: 20px; margin: 30px 0; box-shadow: 0 20px 40px rgba(0,0,0,0.4);">
-                    <img id="qr-code-img" src="" alt="Join QR" style="width: 200px; height: 200px; display: none;">
-                </div>
+            <p class="join-instruction">
+                Scannez pour rejoindre ou allez sur :
+                <span id="join-url-text" class="join-url">...</span>
+            </p>
 
-                <p style="margin-bottom: 40px; font-size: 0.9rem; color: var(--text-muted);">
-                    Scannez pour rejoindre ou naviguez vers :<br>
-                    <span id="join-url-text" style="color: var(--text-primary); font-weight: 600;">...</span>
-                </p>
-
-                <div style="display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 300px;">
-                    <button onclick="startGame()" class="btn-noble" style="width: 100%; font-size: 1.2rem; padding: 18px;">
-                        Lancer la Partie
-                    </button>
-                    <button onclick="cancelGame()" class="btn-noble btn-outline" style="width: 100%;">
-                        Annuler
-                    </button>
-                </div>
+            <div class="lobby-buttons">
+                <button class="btn btn-primary" onclick="startGame()">Démarrer la partie</button>
+                <button class="btn btn-outline" onclick="cancelGame()">Annuler</button>
             </div>
         </div>
     </div>
@@ -75,12 +49,7 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/renderer.js?v=2"></script>
-    <script>
-        window.addEventListener('load', () => {
-            setTimeout(() => {
-                document.body.classList.add('loaded');
-            }, 1000);
-        });
-    </script>
+    <script src="https://cloud.byflash.fr/affenbrotbaum.js"></script>
+    <script>logConnection('game-bancal');</script>
 </body>
-</html>
+</html>

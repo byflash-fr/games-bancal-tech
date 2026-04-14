@@ -9,7 +9,7 @@ const qrcode = require('qrcode');
 function getLocalIP() {
     const interfaces = os.networkInterfaces();
     
-    // First pass: look for physical adapters (skip virtual/WSL)
+    // First pass: look for physical adapters
     for (const name of Object.keys(interfaces)) {
         let n = name.toLowerCase();
         if (n.includes('virtual') || n.includes('vnic') || n.includes('wsl') || n.includes('vethernet')) continue;
@@ -38,115 +38,230 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 const LOCAL_IP = getLocalIP();
-const JOIN_URL = `http://${LOCAL_IP}:${PORT}/mobile.html`;
+// QR Code should redirect to the IP without the port + /<code_de_la_partie>
+// We assume it's deployed on standard 80/443 port for production, but locally we useLOCAL_IP
+const BASE_URL = `http://games.bancal.tech`; 
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-const gameState = {
-    status: 'lobby',
-    timeLeft: 300,
-    players: {},
-    joinUrl: JOIN_URL,
-    qrCodeDataUrl: '',
-    level: gameLogic.generateLevel(2) // Default level
-};
-
-qrcode.toDataURL(JOIN_URL, { margin: 2, scale: 6, color: { dark: '#000000', light: '#ffffff' } }, (err, url) => {
-    if(!err) gameState.qrCodeDataUrl = url;
+// Catch /ABCD routes to redirect to landing with the code prefilled
+app.get('/:code([a-zA-Z0-9]{4})', (req, res) => {
+    res.redirect(`/?code=${req.params.code.toUpperCase()}`);
 });
 
-setInterval(() => {
-    if(gameState.status === 'playing') {
-        gameState.timeLeft--;
-        if(gameState.timeLeft <= 0) {
-            gameState.status = 'defeat';
+const games = {};
+const disconnectTimeouts = {};
+
+function generateGameCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code;
+    do {
+        code = '';
+        for(let i = 0; i < 4; i++) {
+            code += chars.charAt(Math.floor(Math.random() * chars.length));
         }
-    }
-}, 1000);
+    } while(games[code]);
+    return code;
+}
 
 const TICK_RATE = 1000 / 60; // 60 FPS
-const PLAYER_SPEED = 5;
 
 io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
     
-    socket.on('register', (role) => {
-        if (role === 'player') {
-            const shapes = ['square', 'triangle', 'circle', 'cross', 'star'];
-            const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f1c40f', '#9b59b6'];
-            const pCount = Object.keys(gameState.players).length;
-            
-            gameState.players[socket.id] = {
-                id: socket.id,
-                x: 100 + (pCount * 50),
-                y: 100,
-                vx: 0,
-                vy: 0,
-                actionBlink: 0,
-                color: colors[pCount % colors.length],
-                shape: shapes[pCount % shapes.length]
-            };
-            io.emit('stateUpdate', gameState);
+    socket.on('createGame', (data, callback) => {
+        const code = generateGameCode();
+        const joinUrl = `${BASE_URL}/${code}`;
+        
+        games[code] = {
+            code: code,
+            hostName: data.pseudo || 'Le Chef',
+            status: 'lobby',
+            timeLeft: 300,
+            players: {},
+            joinUrl: joinUrl,
+            qrCodeDataUrl: '',
+            level: gameLogic.generateLevel(2) // Default level
+        };
+        
+        qrcode.toDataURL(joinUrl, { margin: 2, scale: 6, color: { dark: '#000000', light: '#ffffff' } }, (err, url) => {
+            if(!err) {
+                games[code].qrCodeDataUrl = url;
+                if(games[code]) {
+                    io.to(code).emit('stateUpdate', games[code]);
+                }
+            }
+        });
+
+        // The host joins the socket room
+        socket.join(code);
+        socket.gameCode = code;
+        socket.role = 'host';
+        
+        callback({ success: true, code: code });
+        console.log(`Game created: ${code} by ${data.pseudo}`);
+    });
+
+    socket.on('joinGame', (data, callback) => {
+        let code = data.code ? data.code.toUpperCase() : null;
+        if (!code || !games[code]) {
+            callback({ success: false, message: 'Partie introuvable' });
+            return;
         }
+
+        const game = games[code];
+        
+        if (game.status !== 'lobby') {
+            callback({ success: false, message: 'La partie a déjà commençée !' });
+            return;
+        }
+        
+        socket.join(code);
+        socket.gameCode = code;
+        socket.role = 'player';
+        
+        const shapes = ['square', 'triangle', 'circle', 'cross', 'star'];
+        const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f1c40f', '#9b59b6'];
+        const pCount = Object.keys(game.players).length;
+        
+        let usedCombos = Object.values(game.players).map(p => p.shape + '_' + p.color);
+        let chosenShape = shapes[pCount % shapes.length];
+        let chosenColor = colors[pCount % colors.length];
+        
+        outer: for(let s of shapes) {
+            for(let c of colors) {
+                if(!usedCombos.includes(s + '_' + c)) {
+                    chosenShape = s;
+                    chosenColor = c;
+                    break outer;
+                }
+            }
+        }
+        
+        game.players[socket.id] = {
+            id: socket.id,
+            pseudo: data.pseudo || `Joueur ${pCount + 1}`,
+            x: 100 + (pCount * 50),
+            y: 100,
+            vx: 0,
+            vy: 0,
+            actionBlink: 0,
+            color: chosenColor,
+            shape: chosenShape
+        };
+        
+        io.to(code).emit('stateUpdate', game);
+        callback({ success: true, code: code });
+        console.log(`Player ${data.pseudo} joined ${code}`);
     });
 
     socket.on('startGame', () => {
-        if (gameState.status === 'lobby' || gameState.status === 'defeat' || gameState.status === 'victory') {
-            gameState.status = 'playing';
-            gameState.timeLeft = 300;
-            gameState.level = gameLogic.generateLevel(Object.keys(gameState.players).length || 2);
-            io.emit('stateUpdate', gameState);
+        const code = socket.gameCode;
+        if(code && games[code]) {
+            const game = games[code];
+            if (game.status === 'lobby' || game.status === 'defeat' || game.status === 'victory') {
+                game.status = 'starting';
+                game.countdown = 5;
+                game.level = gameLogic.generateLevel(Math.max(1, Object.keys(game.players).length));
+                io.to(code).emit('stateUpdate', game);
+            }
+        }
+    });
+
+    socket.on('cancelGame', () => {
+        const code = socket.gameCode;
+        if(code && games[code] && socket.role === 'host') {
+            io.to(code).emit('gameClosed');
+            delete games[code];
+            console.log(`Game ${code} cancelled by host.`);
         }
     });
 
     socket.on('input', (data) => {
-        const player = gameState.players[socket.id];
-        if (!player) return;
-        
-        if (data.type === 'move') {
-            player.vx = data.dx;
-            player.vy = data.dy;
-        } else if (data.type === 'action') {
-            console.log(`Player ${socket.id} pressed ${data.button}`);
-            if (data.button === 'B') player.actionBlink = 15;
-            // A will be used for interactions
+        const code = socket.gameCode;
+        if(code && games[code] && socket.role === 'player') {
+            const player = games[code].players[socket.id];
+            if (!player) return;
+            
+            if (data.type === 'move') {
+                player.vx = data.dx;
+                player.vy = data.dy;
+            } else if (data.type === 'action') {
+                if (data.button === 'B') player.actionBlink = 15;
+            }
         }
     });
 
     socket.on('disconnect', () => {
         console.log(`User disconnected: ${socket.id}`);
-        if(gameState.players[socket.id]) {
-            delete gameState.players[socket.id];
-            io.emit('stateUpdate', gameState);
+        const code = socket.gameCode;
+        if(code && games[code]) {
+            if (socket.role === 'host') {
+                // Host left, terminate game
+                io.to(code).emit('gameClosed');
+                delete games[code];
+                console.log(`Game ${code} closed because host left.`);
+            } else if (socket.role === 'player') {
+                // Player left
+                if(games[code].players[socket.id]) {
+                    delete games[code].players[socket.id];
+                    io.to(code).emit('stateUpdate', games[code]);
+                }
+            }
         }
     });
 });
 
+// Physics & Game Loop
 setInterval(() => {
-    let stateChanged = false;
-    for (const id in gameState.players) {
-        const p = gameState.players[id];
-        if (p.vx !== 0 || p.vy !== 0) {
-            gameLogic.applyPhysics(p, gameState.level);
-            stateChanged = true;
+    for (const code in games) {
+        const gameState = games[code];
+        
+        let stateChanged = false;
+        for (const id in gameState.players) {
+            const p = gameState.players[id];
+            if (p.vx !== 0 || p.vy !== 0) {
+                gameLogic.applyPhysics(p, gameState.level);
+                stateChanged = true;
+            }
+            if (p.actionBlink > 0) {
+                p.actionBlink--;
+                stateChanged = true;
+            }
         }
-        if (p.actionBlink > 0) {
-            p.actionBlink--;
-            stateChanged = true;
+        
+        gameLogic.updateTriggers(gameState.players, gameState.level);
+        
+        if (gameState.status === 'playing') {
+            if (gameLogic.checkWinCondition(gameState.players, gameState.level)) {
+                gameState.status = 'victory';
+            }
         }
+        
+        io.to(code).emit('stateUpdate', gameState);
     }
-    
-    
-    gameLogic.updateTriggers(gameState.players, gameState.level);
-    
-    if(gameState.status === 'playing' && gameLogic.checkWinCondition(gameState.players, gameState.level)) {
-        gameState.status = 'victory';
-    }
-    
-    // Always emit state if a game is running to keep clients in sync
-    // For now emit continuously to assure smooth interpolation or at least state consistency
-    io.emit('stateUpdate', gameState);
 }, TICK_RATE);
+
+// Timer loop
+setInterval(() => {
+    for (const code in games) {
+        const gameState = games[code];
+        if (gameState.status === 'starting') {
+            if (gameState.countdown > 0) {
+                gameState.countdown--;
+            }
+            if (gameState.countdown <= 0) {
+                gameState.status = 'playing';
+                gameState.timeLeft = 300;
+            }
+        } else if (gameState.status === 'playing') {
+            gameState.timeLeft--;
+            if (gameState.timeLeft <= 0) {
+                gameState.status = 'defeat';
+            }
+        }
+    }
+}, 1000);
 
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`Bancal Server running at http://localhost:${PORT}`);
