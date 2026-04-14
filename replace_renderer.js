@@ -184,24 +184,61 @@ function draw() {
     
     fogCtx.globalCompositeOperation = 'destination-out';
     
-    let segments = [];
-    let mapBox = [
-        {x:0,y:0}, {x:gameState.level.width, y:0},
-        {x:gameState.level.width, y:gameState.level.height}, {x:0, y:gameState.level.height}
-    ];
-    segments.push({a: mapBox[0], b: mapBox[1]});
-    segments.push({a: mapBox[1], b: mapBox[2]});
-    segments.push({a: mapBox[2], b: mapBox[3]});
-    segments.push({a: mapBox[3], b: mapBox[0]});
+    // let segments = [];
+    // let mapBox = [
+    //     {x:0,y:0}, {x:gameState.level.width, y:0},
+    //     {x:gameState.level.width, y:gameState.level.height}, {x:0, y:gameState.level.height}
+    // ];
+    // segments.push({a: mapBox[0], b: mapBox[1]});
+    // segments.push({a: mapBox[1], b: mapBox[2]});
+    // segments.push({a: mapBox[2], b: mapBox[3]});
+    // segments.push({a: mapBox[3], b: mapBox[0]});
 
-    const allBlocks = gameState.level.walls.concat(gameState.level.doors.filter(d=>!d.open));
-    for(let w of allBlocks) {
-        segments.push({a:{x:w.x, y:w.y}, b:{x:w.x+w.w, y:w.y}});
-        segments.push({a:{x:w.x+w.w, y:w.y}, b:{x:w.x+w.w, y:w.y+w.h}});
-        segments.push({a:{x:w.x+w.w, y:w.y+w.h}, b:{x:w.x, y:w.y+w.h}});
-        segments.push({a:{x:w.x, y:w.y+w.h}, b:{x:w.x, y:w.y}});
+    // const allBlocks = gameState.level.walls.concat(gameState.level.doors.filter(d=>!d.open));
+    // for(let w of allBlocks) {
+    //     segments.push({a:{x:w.x, y:w.y}, b:{x:w.x+w.w, y:w.y}});
+    //     segments.push({a:{x:w.x+w.w, y:w.y}, b:{x:w.x+w.w, y:w.y+w.h}});
+    //     segments.push({a:{x:w.x+w.w, y:w.y+w.h}, b:{x:w.x, y:w.y+w.h}});
+    //     segments.push({a:{x:w.x, y:w.y+w.h}, b:{x:w.x, y:w.y}});
+    // }
+
+let cachedSegments = null;
+let lastDoorsState = "";
+
+// Plus bas, dans la boucle draw(), remplace toute la création des 'segments' par ce bloc optimisé :
+    
+    fogCtx.globalCompositeOperation = 'destination-out';
+    
+    // OPTIMISATION : On ne recalcule les segments géométriques que si une porte s'ouvre/se ferme
+    let currentDoorsState = gameState.level.doors.map(d => d.open).join(',');
+    if (!cachedSegments || lastDoorsState !== currentDoorsState) {
+        cachedSegments = [];
+        let mapBox = [
+            {x:0, y:0}, {x:gameState.level.width, y:0},
+            {x:gameState.level.width, y:gameState.level.height}, {x:0, y:gameState.level.height}
+        ];
+        cachedSegments.push({a: mapBox[0], b: mapBox[1]});
+        cachedSegments.push({a: mapBox[1], b: mapBox[2]});
+        cachedSegments.push({a: mapBox[2], b: mapBox[3]});
+        cachedSegments.push({a: mapBox[3], b: mapBox[0]});
+
+        const allBlocks = gameState.level.walls.concat(gameState.level.doors.filter(d=>!d.open));
+        for(let w of allBlocks) {
+            // FIX FOG OF WAR : On ajoute une marge de 0.1px pour "souder" les coins et bloquer la lumière
+            let wx = w.x - 0.1, wy = w.y - 0.1, ww = w.w + 0.2, wh = w.h + 0.2;
+            cachedSegments.push({a:{x:wx, y:wy}, b:{x:wx+ww, y:wy}});
+            cachedSegments.push({a:{x:wx+ww, y:wy}, b:{x:wx+ww, y:wy+wh}});
+            cachedSegments.push({a:{x:wx+ww, y:wy+wh}, b:{x:wx, y:wy+wh}});
+            cachedSegments.push({a:{x:wx, y:wy+wh}, b:{x:wx, y:wy}});
+        }
+        lastDoorsState = currentDoorsState;
     }
 
+    for (const id in gameState.players) {
+        let p = gameState.players[id];
+        // On utilise la version en cache !
+        let poly = calculateVisibilityPolygon({x: p.x, y: p.y}, cachedSegments);
+        // ... (la suite de ton code avec ctx.save(), moveTo, etc reste identique)
     for (const id in gameState.players) {
         let p = gameState.players[id];
         let poly = calculateVisibilityPolygon({x: p.x, y: p.y}, segments);
