@@ -50,6 +50,7 @@ app.get('/:code([a-zA-Z0-9]{4})', (req, res) => {
 });
 
 const games = {};
+const disconnectTimeouts = {};
 
 function generateGameCode() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -121,7 +122,10 @@ io.on('connection', (socket) => {
 
         if (existingPlayerId) {
             let pData = game.players[existingPlayerId];
-            clearTimeout(pData.disconnectTimeout);
+            if (disconnectTimeouts[existingPlayerId]) {
+                clearTimeout(disconnectTimeouts[existingPlayerId]);
+                delete disconnectTimeouts[existingPlayerId];
+            }
             pData.disconnected = false;
             pData.id = socket.id;
             
@@ -237,12 +241,13 @@ io.on('connection', (socket) => {
                     p.vy = 0;
                     io.to(code).emit('stateUpdate', games[code]);
                     
-                    p.disconnectTimeout = setTimeout(() => {
+                    disconnectTimeouts[socket.id] = setTimeout(() => {
                         if(games[code] && games[code].players[socket.id]) {
                             delete games[code].players[socket.id];
                             io.to(code).emit('stateUpdate', games[code]);
                             console.log(`Player ${p.pseudo} removed after timeout.`);
                         }
+                        delete disconnectTimeouts[socket.id];
                     }, 30000);
                 }
             }
