@@ -111,37 +111,6 @@ io.on('connection', (socket) => {
 
         const game = games[code];
         
-        // Reconnection logic
-        let existingPlayerId = null;
-        for (let pid in game.players) {
-            if (game.players[pid].pseudo === data.pseudo && game.players[pid].disconnected) {
-                existingPlayerId = pid;
-                break;
-            }
-        }
-
-        if (existingPlayerId) {
-            let pData = game.players[existingPlayerId];
-            if (disconnectTimeouts[existingPlayerId]) {
-                clearTimeout(disconnectTimeouts[existingPlayerId]);
-                delete disconnectTimeouts[existingPlayerId];
-            }
-            pData.disconnected = false;
-            pData.id = socket.id;
-            
-            game.players[socket.id] = pData;
-            delete game.players[existingPlayerId];
-            
-            socket.join(code);
-            socket.gameCode = code;
-            socket.role = 'player';
-            
-            io.to(code).emit('stateUpdate', game);
-            callback({ success: true, code: code });
-            console.log(`Player ${data.pseudo} reconnected to ${code}`);
-            return;
-        }
-
         if (game.status !== 'lobby') {
             callback({ success: false, message: 'La partie a déjà commençée !' });
             return;
@@ -234,21 +203,9 @@ io.on('connection', (socket) => {
                 console.log(`Game ${code} closed because host left.`);
             } else if (socket.role === 'player') {
                 // Player left
-                let p = games[code].players[socket.id];
-                if(p) {
-                    p.disconnected = true;
-                    p.vx = 0;
-                    p.vy = 0;
+                if(games[code].players[socket.id]) {
+                    delete games[code].players[socket.id];
                     io.to(code).emit('stateUpdate', games[code]);
-                    
-                    disconnectTimeouts[socket.id] = setTimeout(() => {
-                        if(games[code] && games[code].players[socket.id]) {
-                            delete games[code].players[socket.id];
-                            io.to(code).emit('stateUpdate', games[code]);
-                            console.log(`Player ${p.pseudo} removed after timeout.`);
-                        }
-                        delete disconnectTimeouts[socket.id];
-                    }, 30000);
                 }
             }
         }

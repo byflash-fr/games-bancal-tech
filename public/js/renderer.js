@@ -249,12 +249,6 @@ function draw() {
             ctx.shadowBlur = Math.min(20, player.actionBlink * 3);
         }
 
-        if (player.disconnected) {
-            ctx.globalAlpha = 0.4;
-            ctx.fillStyle = '#7f8c8d';
-            ctx.fillText('🔴', 0, -10);
-        }
-
         if (player.shape === 'square') {
             ctx.fillRect(-20, -20, 40, 40);
         } else if (player.shape === 'triangle') {
