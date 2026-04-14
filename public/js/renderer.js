@@ -32,6 +32,10 @@ const backgroundMusic = new Audio('/assets/music.mp3');
 backgroundMusic.loop = true;
 backgroundMusic.preload = 'auto';
 backgroundMusic.volume = 0.35;
+const walkingSound = new Audio('/assets/marche.mp3');
+walkingSound.loop = true;
+walkingSound.preload = 'auto';
+walkingSound.volume = 0.4;
 
 function tryPlayBackgroundMusic() {
     if (!backgroundMusic.paused) return;
@@ -40,8 +44,25 @@ function tryPlayBackgroundMusic() {
     });
 }
 
+function tryPlayWalkingSound() {
+    if (!walkingSound.paused) return;
+    walkingSound.play().catch(() => {
+        // Autoplay can be blocked until first user interaction.
+    });
+}
+
+function stopWalkingSound() {
+    if (walkingSound.paused) return;
+    walkingSound.pause();
+    walkingSound.currentTime = 0;
+}
+
 const unlockMusicOnFirstInteraction = () => {
     tryPlayBackgroundMusic();
+    const isAnyPlayerMoving = Object.values(gameState.players || {}).some((player) => player.vx !== 0 || player.vy !== 0);
+    if (isAnyPlayerMoving) {
+        tryPlayWalkingSound();
+    }
     document.removeEventListener('pointerdown', unlockMusicOnFirstInteraction);
     document.removeEventListener('keydown', unlockMusicOnFirstInteraction);
     document.removeEventListener('touchstart', unlockMusicOnFirstInteraction);
@@ -166,12 +187,23 @@ function draw() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
     if(!gameState.level || gameState.status === 'lobby') {
+        stopWalkingSound();
         requestAnimationFrame(draw);
         return;
     }
 
     let pIds = Object.keys(gameState.players);
     let pCount = pIds.length;
+    const isAnyPlayerMoving = pIds.some((id) => {
+        const player = gameState.players[id];
+        return player.vx !== 0 || player.vy !== 0;
+    });
+
+    if (gameState.status === 'playing' && isAnyPlayerMoving) {
+        tryPlayWalkingSound();
+    } else {
+        stopWalkingSound();
+    }
     
     let targetX = gameState.level.width / 2;
     let targetY = gameState.level.height / 2;
