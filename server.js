@@ -229,9 +229,10 @@ io.on('connection', (socket) => {
                 if(games[code].players[socket.id]) {
                     delete games[code].players[socket.id];
                     
-                    // NEW: Check if no more players left
-                    if (Object.keys(games[code].players).length === 0) {
-                        console.log(`Game ${code} ended because all players left.`);
+                    // Only end the game if no players left AND game is in progress
+                    const gameInProgress = games[code].status === 'starting' || games[code].status === 'playing';
+                    if (Object.keys(games[code].players).length === 0 && gameInProgress) {
+                        console.log(`Game ${code} ended because all players left during gameplay.`);
                         io.to(code).emit('gameClosed', { reason: 'no-players' });
                         delete games[code];
                     } else {
