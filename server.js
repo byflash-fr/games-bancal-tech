@@ -151,11 +151,13 @@ io.on('connection', (socket) => {
             }
         }
         
+        const spawnX = (game.level && game.level.spawnX) ? game.level.spawnX + pCount * 55 : 100 + pCount * 55;
+        const spawnY = (game.level && game.level.spawnY) ? game.level.spawnY : 100;
         game.players[socket.id] = {
             id: socket.id,
             pseudo: data.pseudo || `Joueur ${pCount + 1}`,
-            x: 100 + (pCount * 50),
-            y: 100,
+            x: spawnX,
+            y: spawnY,
             vx: 0,
             vy: 0,
             actionBlink: 0,

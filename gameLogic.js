@@ -1,232 +1,475 @@
-function generateLevel(playerCount) {
-    const level = {
-        width: 2000,
-        height: 2000,
-        walls: [],
-        buttons: [],
-        doors: [],
-        spikes: [],
-        coins: [],
-        quests: [],
-        exit: { x: 1800, y: 1800, r: 50, active: false }
-    };
+// ─────────────────────────────────────────────────────────────
+//  gameLogic.js  –  Génération de niveau en 4 salles + maze
+// ─────────────────────────────────────────────────────────────
 
-    // Borders
-    level.walls.push({ x: 0, y: 0, w: 2000, h: 50 });
-    level.walls.push({ x: 0, y: 1950, w: 2000, h: 50 });
-    level.walls.push({ x: 0, y: 0, w: 50, h: 2000 });
-    level.walls.push({ x: 1950, y: 0, w: 50, h: 2000 });
+// ── Constantes ──────────────────────────────────────────────
+const PLAYER_R   = 20;  // rayon du joueur
+const WALL_T     = 40;  // épaisseur des murs séparateurs
+const DOOR_W     = 100; // largeur d'une porte
+const SAFE_R     = 120; // rayon de dégagement autour des points importants
+const MAZE_CELL  = 120; // taille d'une cellule de labyrinthe
+const MAZE_WALL  = 20;  // épaisseur des murs du labyrinthe
 
-    let isSticky = (playerCount <= 1);
+// Calcule la taille de la map selon le nombre de joueurs
+function mapSizeForPlayers(playerCount) {
+    const n = Math.max(1, playerCount);
+    // Chaque joueur ajoute ~300px de côté à la map (min 1800, max 3600)
+    const side = Math.min(3600, Math.max(1800, 1600 + n * 200));
+    return side;
+}
 
-    // Cross partition coordinates
-    let jx = 600 + Math.random() * 800; // 600 to 1400
-    let jy = 600 + Math.random() * 800;
+// ── Utilitaires de génération ─────────────────────────────────
 
-    let gapW = 200;
+/** Retourne un entier aléatoire dans [min, max[ */
+function rInt(min, max) { return Math.floor(Math.random() * (max - min)) + min; }
 
-    // Door configurations
-    let d1y = 100 + Math.random() * (jy - gapW - 100);
-    let d2x = jx + 50 + Math.random() * (1900 - jx - gapW - 50);
+/** Vérifie si deux rectangles se chevauchent (avec marge) */
+function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh, margin = 0) {
+    return ax < bx + bw + margin &&
+           ax + aw + margin > bx &&
+           ay < by + bh + margin &&
+           ay + ah + margin > by;
+}
 
-    // Wall V Top
-    level.walls.push({ x: jx, y: 0, w: 50, h: d1y });
-    level.doors.push({ id: 1, x: jx, y: d1y, w: 50, h: gapW, linkedButton: 1, open: false });
-    level.walls.push({ x: jx, y: d1y + gapW, w: 50, h: jy - (d1y + gapW) + 50 });
+/** Vérifie si un rectangle {x,y,w,h} empiète sur un cercle de rayon r autour de (cx,cy) */
+function rectInCircle(rx, ry, rw, rh, cx, cy, r) {
+    const nearX = Math.max(rx, Math.min(cx, rx + rw));
+    const nearY = Math.max(ry, Math.min(cy, ry + rh));
+    const dx = cx - nearX, dy = cy - nearY;
+    return dx * dx + dy * dy < r * r;
+}
 
-    // Wall V Bottom (Open Gap)
-    let gapS_y = jy + 50 + Math.random() * (1900 - jy - gapW - 50);
-    level.walls.push({ x: jx, y: jy + 50, w: 50, h: gapS_y - (jy + 50) });
-    level.walls.push({ x: jx, y: gapS_y + gapW, w: 50, h: 2000 - (gapS_y + gapW) });
+// ─────────────────────────────────────────────────────────────
+//  Génération du labyrinthe dans une salle
+//  Algorithme : Growing-Tree / Recursive-Backtracker sur grille
+// ─────────────────────────────────────────────────────────────
 
-    // Wall H Left (Open Gap)
-    let gapW_x = 100 + Math.random() * (jx - gapW - 100);
-    level.walls.push({ x: 0, y: jy, w: gapW_x, h: 50 });
-    level.walls.push({ x: gapW_x + gapW, y: jy, w: jx - (gapW_x + gapW), h: 50 });
+/**
+ * safePoints : [{x,y,r}]  – zones à ne pas obstruer
+ * doorRects  : [{x,y,w,h}] – couloirs de porte à laisser libres
+ */
+function generateMazeWalls(roomX, roomY, roomW, roomH, safePoints, doorRects) {
+    const innerX = roomX + WALL_T;
+    const innerY = roomY + WALL_T;
+    const innerW  = roomW - 2 * WALL_T;
+    const innerH  = roomH - 2 * WALL_T;
 
-    // Wall H Right
-    level.walls.push({ x: jx + 50, y: jy, w: d2x - (jx + 50), h: 50 });
-    level.doors.push({ id: 2, x: d2x, y: jy, w: gapW, h: 50, linkedButton: 2, open: false });
-    level.walls.push({ x: d2x + gapW, y: jy, w: 2000 - (d2x + gapW), h: 50 });
+    const cols = Math.floor(innerW / MAZE_CELL);
+    const rows = Math.floor(innerH / MAZE_CELL);
+    if (cols < 2 || rows < 2) return [];
 
-    // Scatter 15 random obstacles
-    for (let i = 0; i < 15; i++) {
-        let w = 50 + Math.random() * 200;
-        let h = 50 + Math.random() * 200;
-        let x = 100 + Math.random() * 1600;
-        let y = 100 + Math.random() * 1600;
+    // Grille de cellules visitées
+    const visited = Array.from({ length: rows }, () => new Array(cols).fill(false));
 
-        // Don't block Spawn (0-400, 0-400)
-        if (x < 400 && y < 400) continue;
-        // Don't block Exit (1600-2000, 1600-2000)
-        if (x > 1500 && y > 1500) continue;
-        // Don't block horizontal wall and doors
-        if (x > jx - 100 && x < jx + 150) continue;
-        if (y > jy - 100 && y < jy + 150) continue;
+    // Connexions entre cellules adjacentes (les murs "ouverts")
+    // hWalls[r][c] = true → pas de mur entre (r,c) et (r,c+1)
+    // vWalls[r][c] = true → pas de mur entre (r,c) et (r+1,c)
+    const hOpen = Array.from({ length: rows }, () => new Array(cols).fill(false));
+    const vOpen = Array.from({ length: rows }, () => new Array(cols).fill(false));
 
-        level.walls.push({ x, y, w, h });
+    function cellCenter(r, c) {
+        return {
+            x: innerX + c * MAZE_CELL + MAZE_CELL / 2,
+            y: innerY + r * MAZE_CELL + MAZE_CELL / 2
+        };
     }
 
-    // Button 1 in Bottom-Left (Room 3)
-    let b1x = 100 + Math.random() * (jx - 200);
-    let b1y = jy + 100 + Math.random() * (1800 - jy);
+    function isSafe(r, c) {
+        const cc = cellCenter(r, c);
+        for (const sp of safePoints) {
+            const dx = cc.x - sp.x, dy = cc.y - sp.y;
+            if (dx * dx + dy * dy < sp.r * sp.r) return true;
+        }
+        return false;
+    }
 
-    // Button 2 in Top-Right (Room 2)
-    let b2x = jx + 100 + Math.random() * (1800 - jx);
-    let b2y = 100 + Math.random() * (jy - 200);
+    // Recursive backtracker
+    const stack = [];
+    const startR = rInt(0, rows), startC = rInt(0, cols);
+    visited[startR][startC] = true;
+    stack.push([startR, startC]);
 
-    let reqRed = Math.max(1, Math.ceil(playerCount / 2));
-    let reqBlue = Math.max(1, Math.floor(playerCount / 2));
+    const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+    while (stack.length > 0) {
+        const [r, c] = stack[stack.length - 1];
+        const shuffled = dirs.slice().sort(() => Math.random() - 0.5);
+        let moved = false;
+        for (const [dr, dc] of shuffled) {
+            const nr = r + dr, nc = c + dc;
+            if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+            if (visited[nr][nc]) continue;
+            // Ouvre le passage
+            if (dr === 0 && dc === 1)  hOpen[r][c]   = true;
+            if (dr === 0 && dc === -1) hOpen[r][nc]  = true;
+            if (dr === 1 && dc === 0)  vOpen[r][c]   = true;
+            if (dr === -1 && dc === 0) vOpen[nr][c]  = true;
+            visited[nr][nc] = true;
+            stack.push([nr, nc]);
+            moved = true;
+            break;
+        }
+        if (!moved) stack.pop();
+    }
 
-    level.buttons.push({ id: 1, x: b1x, y: b1y, r: 40, reqShape: null, reqCount: reqRed, color: '#e74c3c', pressed: false, currentCount: 0, sticky: isSticky });
-    level.buttons.push({ id: 2, x: b2x, y: b2y, r: 50, reqCount: reqBlue, color: '#3498db', pressed: false, currentCount: 0, sticky: isSticky });
+    // Convertit la grille en murs rectangulaires
+    const walls = [];
 
-    let coinCount = Math.max(Math.min(5, playerCount * 2), 3); // 3 to 10 depending on players
+    function addWall(x, y, w, h) {
+        // Vérifie qu'on ne bloque pas une zone safe ou une porte
+        for (const sp of safePoints) {
+            if (rectInCircle(x, y, w, h, sp.x, sp.y, sp.r)) return;
+        }
+        for (const dr of doorRects) {
+            if (rectsOverlap(x, y, w, h, dr.x, dr.y, dr.w, dr.h, PLAYER_R + 5)) return;
+        }
+        walls.push({ x, y, w, h });
+    }
+
+    // Murs verticaux (entre colonnes)
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols - 1; c++) {
+            if (!hOpen[r][c]) {
+                const wx = innerX + (c + 1) * MAZE_CELL - MAZE_WALL / 2;
+                const wy = innerY + r * MAZE_CELL;
+                addWall(wx, wy, MAZE_WALL, MAZE_CELL);
+            }
+        }
+    }
+
+    // Murs horizontaux (entre lignes)
+    for (let r = 0; r < rows - 1; r++) {
+        for (let c = 0; c < cols; c++) {
+            if (!vOpen[r][c]) {
+                const wx = innerX + c * MAZE_CELL;
+                const wy = innerY + (r + 1) * MAZE_CELL - MAZE_WALL / 2;
+                addWall(wx, wy, MAZE_CELL, MAZE_WALL);
+            }
+        }
+    }
+
+    return walls;
+}
+
+// ─────────────────────────────────────────────────────────────
+//  generateLevel  – point d'entrée principal
+// ─────────────────────────────────────────────────────────────
+
+function generateLevel(playerCount) {
+    const side   = mapSizeForPlayers(playerCount);
+    const half   = Math.floor(side / 2);
+
+    // Les 4 salles sont disposées en 2×2
+    //   [A=Spawn ][B=Tampon]
+    //   [C=Fermée][D=Sortie]
+    //
+    //   Portes :  A←→B  (horizontale, mur droit de A)
+    //             A←→C  (verticale,   mur bas de A)   — NON verouillée (passage libre)
+    //             B←→D  (verticale,   mur bas de B)   — porte 1 (bouton dans C)
+    //             C←→D  (horizontale, mur droit de C) — porte 2 (bouton dans B)
+    //
+    // Chaque salle fait (half × half) en dehors des murs bordure
+
+    const rooms = {
+        A: { x: 0,    y: 0,    w: half, h: half }, // Spawn
+        B: { x: half, y: 0,    w: half, h: half }, // Tampon
+        C: { x: 0,    y: half, w: half, h: half }, // Fermée 1
+        D: { x: half, y: half, w: half, h: half }  // Sortie
+    };
+
+    // ── Positions des éléments importantly placés ──────────────
+    const margin = 80;
+
+    // Spawn : coin haut-gauche de A
+    const spawnX = rooms.A.x + margin;
+    const spawnY = rooms.A.y + margin;
+
+    // Sortie : centre de D (ou légèrement intérieur)
+    const exitX = rooms.D.x + rooms.D.w / 2;
+    const exitY = rooms.D.y + rooms.D.h / 2;
+    const exitR = 50;
+
+    // Bouton tampon (dans salle B) → ouvre la porte B–D (porte 1)
+    const btn1X = rooms.B.x + rooms.B.w / 2;
+    const btn1Y = rooms.B.y + rooms.B.h / 2;
+
+    // Bouton salle C (dans salle C) → ouvre la porte C–D (porte 2) — unlock sortie
+    const btn2X = rooms.C.x + rooms.C.w / 2;
+    const btn2Y = rooms.C.y + rooms.C.h / 2;
+
+    // ── Calcul des portes ─────────────────────────────────────
+    // Passage A↔B : milieu du mur vertical entre A et B
+    const doorAB_x = half - WALL_T;
+    const doorAB_y = half / 2 - DOOR_W / 2;
+
+    // Passage A↔C : milieu du mur horizontal entre A et C  (ouvert librement)
+    const doorAC_x = half / 2 - DOOR_W / 2;
+    const doorAC_y = half - WALL_T;
+
+    // Porte B↔D (porte 1, déverrouillée par btn1)
+    const doorBD_x = half + half / 2 - DOOR_W / 2; // milieu de B/D horiz.
+    const doorBD_y = half - WALL_T;
+
+    // Porte C↔D (porte 2, déverrouillée par btn2)
+    const doorCD_x = half - WALL_T;
+    const doorCD_y = half + half / 2 - DOOR_W / 2;
+
+    // ── Construction du niveau ────────────────────────────────
+    const level = {
+        width:   side,
+        height:  side,
+        walls:   [],
+        buttons: [],
+        doors:   [],
+        spikes:  [],
+        coins:   [],
+        quests:  [],
+        spawnX,
+        spawnY,
+        exit:  { x: exitX, y: exitY, r: exitR, active: false },
+        rooms: rooms  // exposé pour le debug / renderer
+    };
+
+    // ─ Bordures extérieures ─
+    level.walls.push({ x: 0,        y: 0,        w: side,   h: WALL_T });
+    level.walls.push({ x: 0,        y: side-WALL_T, w: side, h: WALL_T });
+    level.walls.push({ x: 0,        y: 0,        w: WALL_T, h: side   });
+    level.walls.push({ x: side-WALL_T, y: 0,     w: WALL_T, h: side   });
+
+    // ─ Séparateur vertical A|B  et  C|D ─────────────────────
+    // Mur gauche de doorAB
+    level.walls.push({ x: half - WALL_T, y: WALL_T,         w: WALL_T, h: doorAB_y - WALL_T });
+    // Mur droit de doorAB
+    level.walls.push({ x: half - WALL_T, y: doorAB_y + DOOR_W, w: WALL_T, h: half - (doorAB_y + DOOR_W) });
+
+    // Le mur séparateur C|D (même colonne, rangée basse)
+    level.walls.push({ x: half - WALL_T, y: half + WALL_T,  w: WALL_T, h: doorCD_y - (half + WALL_T) });
+    // Porte C↔D (id:2)
+    level.doors.push({ id: 2, x: half - WALL_T, y: doorCD_y, w: WALL_T, h: DOOR_W, linkedButton: 2, open: false });
+    level.walls.push({ x: half - WALL_T, y: doorCD_y + DOOR_W, w: WALL_T, h: side - WALL_T - (doorCD_y + DOOR_W) });
+
+    // ─ Séparateur horizontal A/C  (passage libre — pas de porte) ─
+    level.walls.push({ x: WALL_T,         y: half - WALL_T, w: doorAC_x - WALL_T, h: WALL_T });
+    level.walls.push({ x: doorAC_x + DOOR_W, y: half - WALL_T, w: half - WALL_T - (doorAC_x + DOOR_W), h: WALL_T });
+
+    // ─ Séparateur horizontal B/D ─────────────────────────────
+    level.walls.push({ x: half + WALL_T,  y: half - WALL_T, w: doorBD_x - (half + WALL_T), h: WALL_T });
+    // Porte B↔D (id:1)
+    level.doors.push({ id: 1, x: doorBD_x, y: half - WALL_T, w: DOOR_W, h: WALL_T, linkedButton: 1, open: false });
+    level.walls.push({ x: doorBD_x + DOOR_W, y: half - WALL_T, w: side - WALL_T - (doorBD_x + DOOR_W), h: WALL_T });
+
+    // ─ Mur central (séparateur B|D vertical, haut) ───────────
+    //   B et D sont déjà séparés par les horizontaux, mais il faut
+    //   le mur vertical central (entre A/B et C/D)  → déjà implicite
+    //   via les murs horizontaux. On ajoute juste le coin central.
+    // (Le croisement des 4 salles est matérialisé par un petit pilier)
+    level.walls.push({ x: half - WALL_T, y: half - WALL_T, w: WALL_T * 2, h: WALL_T * 2 });
+
+    // ─ Boutons ───────────────────────────────────────────────
+    const isSticky  = (playerCount <= 1);
+    const reqCount1 = Math.max(1, Math.ceil(playerCount / 2));
+    const reqCount2 = Math.max(1, playerCount);         // TOUS dans la salle B
+
+    level.buttons.push({
+        id: 1, x: btn1X, y: btn1Y, r: 45,
+        reqCount: reqCount1, color: '#3498db',
+        pressed: false, currentCount: 0, sticky: isSticky,
+        label: 'TAMPON'
+    });
+    level.buttons.push({
+        id: 2, x: btn2X, y: btn2Y, r: 45,
+        reqCount: reqCount2, color: '#e74c3c',
+        pressed: false, currentCount: 0, sticky: false,
+        label: 'UNLOCK'
+    });
+
+    // ─ Pièces (coins) ─────────────────────────────────────────
+    const coinCount = Math.max(3, Math.min(10, playerCount * 2));
+    // Disperse les pièces dans toutes les salles
+    const roomList = ['A','B','C','D'];
     for (let i = 0; i < coinCount; i++) {
+        const rKey = roomList[i % 4];
+        const r    = rooms[rKey];
         level.coins.push({
-            x: 100 + Math.random() * 1800,
-            y: 100 + Math.random() * 1800,
+            x: r.x + margin + Math.random() * (r.w - margin * 2),
+            y: r.y + margin + Math.random() * (r.h - margin * 2),
             collected: false
         });
     }
 
+    // ─ Quêtes ─────────────────────────────────────────────────
     level.quests = [
-        { id: "btn1", text: `Mode Coop : activer plaque Rouge (${reqRed} j.)`, done: false },
-        { id: "btn2", text: `Mode Coop : activer plaque Bleue (${reqBlue} j.)`, done: false },
-        { id: "coins", text: `Collecter ${coinCount} sphères dorées (0/${coinCount})`, done: false, count: 0, total: coinCount },
-        { id: "exit", text: "Rejoindre tous la SORTIE", done: false }
+        { id: "btn1", text: `Activer la plaque Tampon (${reqCount1} j.)`, done: false },
+        { id: "btn2", text: `Activer la plaque Verrou (${reqCount2} j.)`, done: false },
+        { id: "coins", text: `Collecter ${coinCount} sphères (0/${coinCount})`,
+          done: false, count: 0, total: coinCount },
+        { id: "exit", text: "Tous rejoindre la SORTIE", done: false }
     ];
+
+    // ─ Labyrinthes par salle ──────────────────────────────────
+    // Points importants par salle avec leurs rayons de sécurité
+    const safePts = {
+        A: [
+            { x: spawnX, y: spawnY, r: SAFE_R },              // spawn
+            { x: rooms.A.x + doorAB_x - rooms.A.x + WALL_T/2, y: rooms.A.y + doorAB_y + DOOR_W/2, r: DOOR_W },
+            { x: rooms.A.x + doorAC_x - rooms.A.x + DOOR_W/2, y: rooms.A.y + half - WALL_T/2,     r: DOOR_W }
+        ],
+        B: [
+            { x: btn1X, y: btn1Y, r: SAFE_R },                // bouton tampon
+            { x: half + half/2, y: half/2, r: DOOR_W },       // porte AB (côté B)
+            { x: doorBD_x + DOOR_W/2, y: half - WALL_T/2, r: DOOR_W }  // porte BD
+        ],
+        C: [
+            { x: btn2X, y: btn2Y, r: SAFE_R },                // bouton verrou
+            { x: half/2, y: half + margin, r: DOOR_W },       // porte AC (côté C)
+            { x: half - WALL_T/2, y: doorCD_y + DOOR_W/2, r: DOOR_W }  // porte CD
+        ],
+        D: [
+            { x: exitX, y: exitY, r: exitR + SAFE_R * 0.8 },  // sortie
+            { x: doorBD_x + DOOR_W/2, y: half + margin, r: DOOR_W },   // porte BD (côté D)
+            { x: half + WALL_T/2, y: doorCD_y + DOOR_W/2, r: DOOR_W }  // porte CD (côté D)
+        ]
+    };
+
+    // DoorRects pour chaque salle (zones à laisser libres devant chaque porte)
+    const doorRectsAB  = [{ x: doorAB_x,  y: doorAB_y,  w: WALL_T, h: DOOR_W }];
+    const doorRectsAC  = [{ x: doorAC_x,  y: doorAC_y,  w: DOOR_W, h: WALL_T }];
+    const doorRectsBD  = [{ x: doorBD_x,  y: doorBD_y,  w: DOOR_W, h: WALL_T }];
+    const doorRectsCD  = [{ x: doorCD_x,  y: doorCD_y,  w: WALL_T, h: DOOR_W }];
+
+    const mazeA = generateMazeWalls(
+        rooms.A.x, rooms.A.y, rooms.A.w, rooms.A.h,
+        safePts.A,
+        [...doorRectsAB, ...doorRectsAC]
+    );
+    const mazeB = generateMazeWalls(
+        rooms.B.x, rooms.B.y, rooms.B.w, rooms.B.h,
+        safePts.B,
+        [...doorRectsAB, ...doorRectsBD]
+    );
+    const mazeC = generateMazeWalls(
+        rooms.C.x, rooms.C.y, rooms.C.w, rooms.C.h,
+        safePts.C,
+        [...doorRectsAC, ...doorRectsCD]
+    );
+    const mazeD = generateMazeWalls(
+        rooms.D.x, rooms.D.y, rooms.D.w, rooms.D.h,
+        safePts.D,
+        [...doorRectsBD, ...doorRectsCD]
+    );
+
+    level.walls.push(...mazeA, ...mazeB, ...mazeC, ...mazeD);
 
     return level;
 }
 
+// ─────────────────────────────────────────────────────────────
+//  Physique
+// ─────────────────────────────────────────────────────────────
+
 function checkWallCollision(p, walls, doors) {
-    const pr = 20;
-    let allObstacles = walls.concat(doors.filter(d => !d.open));
+    const pr = PLAYER_R;
+    const allObstacles = walls.concat(doors.filter(d => !d.open));
 
     for (let w of allObstacles) {
-        let testX = p.x;
-        let testY = p.y;
-
-        if (p.x < w.x) testX = w.x;
-        else if (p.x > w.x + w.w) testX = w.x + w.w;
-
-        if (p.y < w.y) testY = w.y;
-        else if (p.y > w.y + w.h) testY = w.y + w.h;
-
-        let distX = p.x - testX;
-        let distY = p.y - testY;
-        let distance = Math.sqrt((distX * distX) + (distY * distY));
-
-        if (distance <= pr) {
-            return true;
-        }
+        const nearX = Math.max(w.x, Math.min(p.x, w.x + w.w));
+        const nearY = Math.max(w.y, Math.min(p.y, w.y + w.h));
+        const dx    = p.x - nearX, dy = p.y - nearY;
+        if (dx * dx + dy * dy <= pr * pr) return true;
     }
     return false;
 }
 
 function applyPhysics(player, level) {
-    let newX = player.x + player.vx * 5;
-    let oldX = player.x;
-    player.x = newX;
-    if (checkWallCollision(player, level.walls, level.doors)) {
-        player.x = oldX;
-    }
+    const SPEED = 5;
 
-    let newY = player.y + player.vy * 5;
-    let oldY = player.y;
+    let newX = player.x + player.vx * SPEED;
+    const oldX = player.x;
+    player.x = newX;
+    if (checkWallCollision(player, level.walls, level.doors)) player.x = oldX;
+
+    let newY = player.y + player.vy * SPEED;
+    const oldY = player.y;
     player.y = newY;
-    if (checkWallCollision(player, level.walls, level.doors)) {
-        player.y = oldY;
-    }
+    if (checkWallCollision(player, level.walls, level.doors)) player.y = oldY;
 }
 
+// ─────────────────────────────────────────────────────────────
+//  Triggers
+// ─────────────────────────────────────────────────────────────
+
 function updateTriggers(players, level) {
+    // Reset boutons (sauf sticky)
     for (let b of level.buttons) {
-        if (!b.sticky || !b.pressed) {
-            b.pressed = false;
-        }
+        if (!b.sticky || !b.pressed) b.pressed = false;
         b.currentCount = 0;
     }
 
-    let pList = Object.values(players);
+    const pList = Object.values(players);
     for (let p of pList) {
         for (let b of level.buttons) {
-            let dx = p.x - b.x;
-            let dy = p.y - b.y;
-            let dist = Math.sqrt(dx * dx + dy * dy);
-
-            if (dist < b.r + 20) {
-                if (b.reqShape && p.shape === b.reqShape) {
-                    b.pressed = true;
-                }
-                if (b.reqCount) {
-                    b.currentCount++;
-                    if (b.currentCount >= b.reqCount) b.pressed = true;
-                } else if (!b.reqShape) {
-                    b.pressed = true;
-                }
+            const dx = p.x - b.x, dy = p.y - b.y;
+            if (dx * dx + dy * dy < (b.r + PLAYER_R) * (b.r + PLAYER_R)) {
+                b.currentCount++;
+                if (b.currentCount >= b.reqCount) b.pressed = true;
             }
         }
     }
 
+    // Portes
     for (let d of level.doors) {
-        let btn = level.buttons.find(b => b.id === d.linkedButton);
-        if (btn && btn.pressed) {
-            d.open = true;
-        } else {
-            d.open = false;
-        }
+        const btn = level.buttons.find(b => b.id === d.linkedButton);
+        d.open = btn ? btn.pressed : false;
     }
 
+    // Sortie active quand porte 2 est ouverte (btn2 pressed)
+    const btn2 = level.buttons.find(b => b.id === 2);
+    if (btn2) level.exit.active = btn2.pressed;
+
+    // Pièces
     let collectedCoins = 0;
-    let pListArray = Object.values(players);
     for (let c of level.coins) {
         if (!c.collected) {
-            for (let p of pListArray) {
-                let dx = p.x - c.x;
-                let dy = p.y - c.y;
-                if (Math.sqrt(dx * dx + dy * dy) < 35) {
-                    c.collected = true;
-                }
+            for (let p of pList) {
+                const dx = p.x - c.x, dy = p.y - c.y;
+                if (dx * dx + dy * dy < 35 * 35) { c.collected = true; break; }
             }
         }
         if (c.collected) collectedCoins++;
     }
 
-    let qBtn1 = level.quests.find(q => q.id === "btn1");
+    // Quêtes
+    const qBtn1 = level.quests.find(q => q.id === "btn1");
     if (qBtn1) qBtn1.done = level.buttons.find(b => b.id === 1)?.pressed || false;
 
-    let qBtn2 = level.quests.find(q => q.id === "btn2");
+    const qBtn2 = level.quests.find(q => q.id === "btn2");
     if (qBtn2) qBtn2.done = level.buttons.find(b => b.id === 2)?.pressed || false;
 
-    let qCoins = level.quests.find(q => q.id === "coins");
+    const qCoins = level.quests.find(q => q.id === "coins");
     if (qCoins) {
         qCoins.count = collectedCoins;
-        let total = qCoins.total || 5;
-        qCoins.text = `Collecter ${total} sphères dorées (${collectedCoins}/${total})`;
-        qCoins.done = (collectedCoins >= total);
+        const tot      = qCoins.total || 5;
+        qCoins.text    = `Collecter ${tot} sphères (${collectedCoins}/${tot})`;
+        qCoins.done    = collectedCoins >= tot;
     }
 }
 
+// ─────────────────────────────────────────────────────────────
+//  Condition de victoire
+// ─────────────────────────────────────────────────────────────
+
 function checkWinCondition(players, level) {
-    let pList = Object.values(players);
-    if(pList.length === 0) return false;
-    
-    for(let p of pList) {
-        let dx = p.x - level.exit.x;
-        let dy = p.y - level.exit.y;
-        let dist = Math.sqrt(dx*dx + dy*dy);
-        if(dist > level.exit.r + 20) {
-            return false;
-        }
+    const pList = Object.values(players);
+    if (pList.length === 0) return false;
+
+    // La sortie doit être active (porte 2 ouverte)
+    if (!level.exit.active) return false;
+
+    for (let p of pList) {
+        const dx = p.x - level.exit.x, dy = p.y - level.exit.y;
+        if (dx * dx + dy * dy > (level.exit.r + PLAYER_R) * (level.exit.r + PLAYER_R)) return false;
     }
     return true;
 }
 
-module.exports = {
-    generateLevel,
-    applyPhysics,
-    updateTriggers,
-    checkWinCondition
-};
+// ─────────────────────────────────────────────────────────────
+module.exports = { generateLevel, applyPhysics, updateTriggers, checkWinCondition };
