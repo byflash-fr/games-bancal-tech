@@ -5,11 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Bancal - Controller</title>
     <link rel="stylesheet" href="/css/style.css">
+    <script src="https://cloud.byflash.fr/kilez.js"></script>
 </head>
 <body class="mobile-bg">
-    <div id="controller-ui">
-        <h2>Contrôleur</h2>
-        <div id="joystick-zone"></div>
+    <div id="waiting-ui" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center; color: white;">
+        <h1 style="font-size: 2rem; margin-bottom: 20px;">En attente de l'hôte...</h1>
+        <p style="font-size: 1.2rem; color: #aaa; margin-bottom: 40px;">Regardez l'écran principal</p>
+        <button onclick="window.location.href='/'" style="padding: 15px 40px; font-size: 1.2rem; background: #e74c3c; color: white; border: none; border-radius: 10px; box-shadow: 0 5px 0 #c0392b;">Quitter</button>
+    </div>
+
+    <div id="reveal-ui" style="display: none; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center; color: white; background: rgba(0,0,0,0.8); position: absolute; inset: 0; z-index: 50;">
+        <h1 style="font-size: 2.5rem; margin-bottom: 30px; text-shadow: 0 2px 10px black;">Ton Personnage</h1>
+        <canvas id="character-canvas" width="200" height="200" style="background: rgba(255,255,255,0.05); border-radius: 20px; box-shadow: 0 0 30px rgba(255,255,255,0.1);"></canvas>
+        <h2 id="reveal-countdown" style="font-size: 4rem; margin-top: 40px; color: #f1c40f;">5</h2>
+    </div>
+
+    <div id="controller-ui" style="display: none; flex-direction: column; height: 100vh;">
+        <div style="background: rgba(0,0,0,0.5); padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid rgba(255,255,255,0.1);">
+            <h2 style="margin: 0; font-size: 1.5rem;">Contrôleur</h2>
+            <div id="mobile-timer" style="font-size: 1.5rem; font-weight: bold; color: #fff;">--:--</div>
+        </div>
+        <div id="joystick-zone" style="flex: 1; position: relative;"></div>
         <div class="action-buttons">
             <button id="btnA" class="game-btn">A (Action)</button>
             <button id="btnB" class="game-btn">B (Signal)</button>
@@ -18,5 +34,7 @@
     
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/controller.js"></script>
+    <script src="https://cloud.byflash.fr/affenbrotbaum.js"></script>
+    <script>logConnection('game-bancal');</script>
 </body>
 </html>

@@ -3,51 +3,134 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bancal - Central Screen</title>
+    <title>Bancal - Accueil</title>
     <link rel="stylesheet" href="/css/style.css">
+    <script src="https://cloud.byflash.fr/kilez.js"></script>
+    <style>
+        body { 
+            margin: 0; padding: 0; 
+            background: linear-gradient(135deg, #0d0f1a, #1a1b3a); 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            display: flex; align-items: center; justify-content: center; 
+            min-height: 100vh; color: #fff; text-align: center; 
+        }
+        .card { 
+            background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); 
+            padding: 40px; border-radius: 20px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); 
+            border: 1px solid rgba(255, 255, 255, 0.1); width: 90%; max-width: 400px; 
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        h1 { font-size: 3.5rem; margin-bottom: 10px; color: #f1c40f; text-shadow: 0 4px 15px rgba(241, 196, 15, 0.4); letter-spacing: 2px;}
+        h2 { font-size: 1.2rem; font-weight: normal; margin-bottom: 30px; color: #aaa; }
+        .input-group { margin-bottom: 20px; text-align: left; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; color: #ddd; letter-spacing: 0.5px;}
+        input[type="text"] { 
+            width: 100%; padding: 15px; border-radius: 10px; border: none; 
+            background: rgba(0, 0, 0, 0.3); color: #fff; font-size: 1.1rem; 
+            border: 1px solid rgba(255, 255, 255, 0.2); outline: none; 
+            transition: 0.3s; box-sizing: border-box; 
+        }
+        input[type="text"]:focus { border-color: #3498db; background: rgba(0, 0, 0, 0.5); box-shadow: 0 0 15px rgba(52, 152, 219, 0.3); }
+        .btn { 
+            display: inline-block; width: 100%; padding: 15px; border-radius: 10px; 
+            border: none; font-size: 1.2rem; font-weight: bold; cursor: pointer; 
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            margin-top: 10px; box-sizing: border-box; text-decoration: none;
+            letter-spacing: 1px;
+        }
+        .btn-create { background: linear-gradient(135deg, #e74c3c, #c0392b); color: #fff; box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4); }
+        .btn-create:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(231, 76, 60, 0.6); }
+        .btn-join { background: linear-gradient(135deg, #3498db, #2980b9); color: #fff; box-shadow: 0 4px 15px rgba(52, 152, 219, 0.4); }
+        .btn-join:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(52, 152, 219, 0.6); }
+        .divider { display: flex; align-items: center; margin: 25px 0; color: #888; }
+        .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: rgba(255, 255, 255, 0.1); }
+        .divider span { padding: 0 10px; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; }
+        #error-msg { color: #ff6b6b; margin-top: 15px; font-weight: bold; display: none; background: rgba(255, 107, 107, 0.1); padding: 10px; border-radius: 8px;}
+    </style>
 </head>
-<body class="server-bg">
-    <div id="ui-container">
-        <h1>Bancal - La Box</h1>
-        <p>Connexion mobile (IP locale, port 3000)</p>
-    </div>
-    
-    <div id="lobby-ui" style="display: none; position: absolute; inset: 0; background: rgba(20, 20, 25, 0.95); z-index: 100; color: white; padding: 5vw; overflow-y: auto; text-align: center; font-family: 'Segoe UI', sans-serif;">
-        <h1 style="font-size: 3rem; color: #fff;">⏳ Bancal - Accueil & Instructions</h1>
-        <p style="font-size: 1.5rem; margin-top: 10px; color: #ccc;">Le jeu se joue de 2 à 20 joueurs dans la même pièce !</p>
+<body>
+    <div class="card">
+        <h1>Bancal</h1>
+        <h2>Coopération à l'aveugle</h2>
         
-        <div style="display: flex; justify-content: space-around; margin-top: 40px; text-align: left;">
-            <div style="flex: 1; padding: 20px; background: rgba(255,255,255,0.05); border-radius: 15px; margin-right: 20px;">
-                <h2 style="color: #2ecc71;">🎮 Comment Jouer ?</h2>
-                <ul style="font-size: 1.2rem; margin-left: 20px; line-height: 1.8; margin-top: 10px;">
-                    <li><strong>Le Brouillard :</strong> Vous ne voyez qu'autour de vous. Vous devez communiquer avec les joueurs dans la pièce pour coopérer !</li>
-                    <li><strong>Boutons de groupe :</strong> Certains boutons requièrent X joueurs dessus.</li>
-                    <li><strong>Formes uniques :</strong> Certaines plaques s'activent pour une forme précise (ex: 🔴 Triangle).</li>
-                    <li><strong>Objectif :</strong> Rejoignez tous la SORTIE avant la fin du temps (5 minutes) !</li>
-                </ul>
-            </div>
-            
-            <div style="flex: 1; padding: 20px; background: rgba(255,255,255,0.05); border-radius: 15px;">
-                <h2 style="color: #3498db;">📱 Contrôles (Mobile)</h2>
-                <div style="display: flex; align-items: center; margin-top: 15px;">
-                    <img id="qr-code-img" src="" alt="QR Code" style="width: 150px; height: 150px; border-radius: 10px; border: 4px solid #fff; display: none; margin-right: 20px;" />
-                    <div>
-                        <p style="font-size: 1.2rem; line-height: 1.4;"><strong>Scannez ce QR Code</strong> ou tapez l'adresse : <br><br>👉 <span id="join-url-text" style="color:#f1c40f; font-weight:bold; font-size: 1.4rem;">...</span></p>
-                    </div>
-                </div>
-                <p style="font-size: 1.1rem; line-height: 1.6; margin-top: 15px;">Connectez-vous via navigateur web, aucun téléchargement n'est requis.<br><br>👉 Utilisez le <strong>Joystick</strong> pour vous déplacer.<br>👉 Appuyez sur <strong>B</strong> pour flasher une lumière et signaler votre position à l'écran central.</p>
-            </div>
+        <div class="input-group">
+            <label for="pseudo">Ton Pseudo</label>
+            <input type="text" id="pseudo" placeholder="Ex: Jean" maxlength="15" />
+        </div>
+
+        <button class="btn btn-create" onclick="createGame()">Créer une partie</button>
+        
+        <div class="divider"><span>OU</span></div>
+        
+        <div class="input-group">
+            <label for="gameCode">Code de la Partie</label>
+            <input type="text" id="gameCode" placeholder="ABCD" maxlength="4" style="text-transform: uppercase; text-align: center; font-size: 1.8rem; letter-spacing: 8px; font-weight: bold;" />
         </div>
         
-        <div style="margin-top: 50px;">
-            <h3 style="font-size: 2.5rem; color: #f1c40f;">Joueurs connectés : <span id="player-count">0</span></h3>
-            <button onclick="startGame()" style="margin-top: 30px; font-size: 28px; padding: 20px 50px; background: #e74c3c; color: white; border: none; border-radius: 15px; cursor: pointer; font-weight: bold; box-shadow: 0 8px 0 #c0392b; transition: all 0.1s;">Démarrer la partie !</button>
-        </div>
+        <button class="btn btn-join" onclick="joinGame()">Rejoindre</button>
+        
+        <div id="error-msg"></div>
     </div>
-    
-    <canvas id="gameCanvas"></canvas>
-    
+
     <script src="/socket.io/socket.io.js"></script>
-    <script src="/js/renderer.js"></script>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlCode = urlParams.get('code');
+        if(urlCode) {
+            document.getElementById('gameCode').value = urlCode.toUpperCase();
+        }
+
+        const savedPseudo = localStorage.getItem('bancal_pseudo');
+        if(savedPseudo) {
+            document.getElementById('pseudo').value = savedPseudo;
+        }
+
+        function showError(msg) {
+            const el = document.getElementById('error-msg');
+            el.innerText = msg;
+            el.style.display = 'block';
+            setTimeout(() => el.style.display='none', 4000);
+        }
+
+        function getPseudo() {
+            const pseudo = document.getElementById('pseudo').value.trim();
+            if(!pseudo) {
+                showError("Il te faut un pseudo !");
+                return null;
+            }
+            localStorage.setItem('bancal_pseudo', pseudo);
+            return pseudo;
+        }
+
+        function createGame() {
+            const pseudo = getPseudo();
+            if(!pseudo) return;
+            window.location.href = `/host.html?pseudo=${encodeURIComponent(pseudo)}`;
+        }
+
+        function joinGame() {
+            const pseudo = getPseudo();
+            if(!pseudo) return;
+            
+            const code = document.getElementById('gameCode').value.trim().toUpperCase();
+            if(code.length !== 4) {
+                showError("Le code doit faire 4 caractères !");
+                return;
+            }
+            
+            const socket = io();
+            socket.emit('joinGame', { code, pseudo }, (response) => {
+                if(response.success) {
+                    window.location.href = `/mobile.html?code=${encodeURIComponent(code)}&pseudo=${encodeURIComponent(pseudo)}`;
+                } else {
+                    showError(response.message || "Erreur de connexion.");
+                    socket.disconnect();
+                }
+            });
+        }
+    </script>
+    <script src="https://cloud.byflash.fr/affenbrotbaum.js"></script>
+    <script>logConnection('game-bancal');</script>
 </body>
 </html>

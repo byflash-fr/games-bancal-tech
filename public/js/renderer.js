@@ -10,14 +10,23 @@ window.addEventListener('resize', () => {
     canvas.height = window.innerHeight;
 });
 
+const urlParams = new URLSearchParams(window.location.search);
+const pseudo = urlParams.get('pseudo') || 'Host';
+
 let gameState = { players: {}, level: null };
 
-socket.emit('register', 'observer');
+socket.emit('createGame', { pseudo }, (response) => {
+    if(response.success) {
+        console.log("Game created:", response.code);
+    }
+});
 
 const lobbyUI = document.getElementById('lobby-ui');
 const pCountSpan = document.getElementById('player-count');
 const joinUrlText = document.getElementById('join-url-text');
 const qrCodeImg = document.getElementById('qr-code-img');
+const gameCodeDisplay = document.getElementById('game-code-display');
+const playersList = document.getElementById('players-list');
 
 socket.on('stateUpdate', (state) => {
     gameState = state;
@@ -25,6 +34,15 @@ socket.on('stateUpdate', (state) => {
     if (state.status !== 'playing') {
         if (lobbyUI) lobbyUI.style.display = 'block';
         if (pCountSpan) pCountSpan.innerText = Object.keys(state.players).length;
+        if (gameCodeDisplay) gameCodeDisplay.innerText = state.code;
+        
+        if (playersList) {
+            playersList.innerHTML = '';
+            for(let id in state.players) {
+                let p = state.players[id];
+                playersList.innerHTML += `<li style="margin-bottom: 10px; display: flex; align-items: center;"><span style="display:inline-block; width:20px; height:20px; background:${p.color}; border-radius:50%; margin-right:15px; border:2px solid white;"></span>${p.pseudo}</li>`;
+            }
+        }
         
         if (state.qrCodeDataUrl && qrCodeImg.src !== state.qrCodeDataUrl) {
             joinUrlText.innerText = state.joinUrl;
@@ -103,41 +121,68 @@ function calculateVisibilityPolygon(origin, segments) {
     return intersects;
 }
 
-let camera = { x: 0, y: 0 };
 
-// Optimized fog canvas reuse
+
+let camera = { x: 0, y: 0, scale: 1 };
 const fogCanvas = document.createElement('canvas');
 const fogCtx = fogCanvas.getContext('2d', { willReadFrequently: true });
+
+function cancelGame() {
+    socket.emit('cancelGame');
+}
+
+socket.on('gameClosed', () => {
+    alert("Partie annulée !");
+    window.location.href = '/';
+});
 
 function draw() {
     ctx.fillStyle = '#1e1e24';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    if(!gameState.level) {
+    if(!gameState.level || gameState.status === 'lobby') {
         requestAnimationFrame(draw);
         return;
     }
 
-    let pCount = Object.keys(gameState.players).length;
-    let cx = gameState.level.width / 2;
-    let cy = gameState.level.height / 2;
-    if(pCount > 0) {
-        cx = 0; cy = 0;
-        for(let id in gameState.players) {
-            cx += gameState.players[id].x;
-            cy += gameState.players[id].y;
+    let pIds = Object.keys(gameState.players);
+    let pCount = pIds.length;
+    
+    let targetX = gameState.level.width / 2;
+    let targetY = gameState.level.height / 2;
+    let targetScale = 1.0;
+
+    if (pCount > 0) {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for(let id of pIds) {
+            let p = gameState.players[id];
+            if(p.x < minX) minX = p.x;
+            if(p.y < minY) minY = p.y;
+            if(p.x > maxX) maxX = p.x;
+            if(p.y > maxY) maxY = p.y;
         }
-        cx /= pCount;
-        cy /= pCount;
+        
+        targetX = (minX + maxX) / 2;
+        targetY = (minY + maxY) / 2;
+        
+        let bw = (maxX - minX) + 600; // padding around players
+        let bh = (maxY - minY) + 600; 
+        
+        targetScale = Math.min(canvas.width / bw, canvas.height / bh);
+        if(targetScale > 1.2) targetScale = 1.2;
+        if(targetScale < 0.2) targetScale = 0.2;
     }
 
-    camera.x += (cx - canvas.width/2 - camera.x) * 0.1;
-    camera.y += (cy - canvas.height/2 - camera.y) * 0.1;
+    camera.x += (targetX - camera.x) * 0.1;
+    camera.y += (targetY - camera.y) * 0.1;
+    camera.scale += (targetScale - camera.scale) * 0.1;
 
     ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.scale(camera.scale, camera.scale);
     ctx.translate(-camera.x, -camera.y);
 
-    // Floor Grid
+    // Grid
     ctx.strokeStyle = '#2b2b36';
     ctx.lineWidth = 2;
     for(let i=0; i<=gameState.level.width; i+=100) {
@@ -147,7 +192,6 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(gameState.level.width, i); ctx.stroke();
     }
 
-    // Exit
     ctx.fillStyle = gameState.level.exit.active ? '#2ecc71' : '#7f8c8d';
     ctx.beginPath();
     ctx.arc(gameState.level.exit.x, gameState.level.exit.y, gameState.level.exit.r, 0, Math.PI*2);
@@ -156,7 +200,6 @@ function draw() {
     ctx.font = '24px bold Arial';
     ctx.fillText("SORTIE", gameState.level.exit.x - 45, gameState.level.exit.y + 8);
 
-    // Buttons
     for(let b of gameState.level.buttons) {
         ctx.fillStyle = b.pressed ? '#2ecc71' : b.color;
         ctx.beginPath();
@@ -187,14 +230,20 @@ function draw() {
         }
     }
 
-    // Players
     for (const id in gameState.players) {
         const player = gameState.players[id];
-        ctx.fillStyle = player.color;
-        
         ctx.save();
         ctx.translate(player.x, player.y);
         
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 24px Arial';
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#000';
+        ctx.strokeText(player.pseudo, 0, -35);
+        ctx.fillText(player.pseudo, 0, -35);
+        
+        ctx.fillStyle = player.color;
         if(player.actionBlink > 0) {
             ctx.shadowColor = '#fff';
             ctx.shadowBlur = Math.min(20, player.actionBlink * 3);
@@ -203,107 +252,103 @@ function draw() {
         if (player.shape === 'square') {
             ctx.fillRect(-20, -20, 40, 40);
         } else if (player.shape === 'triangle') {
-            ctx.beginPath();
-            ctx.moveTo(0, -20);
-            ctx.lineTo(20, 20);
-            ctx.lineTo(-20, 20);
-            ctx.closePath();
-            ctx.fill();
+            ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(20, 20); ctx.lineTo(-20, 20); ctx.closePath(); ctx.fill();
         } else if (player.shape === 'cross') {
-            ctx.fillRect(-20, -6, 40, 12);
-            ctx.fillRect(-6, -20, 12, 40);
+            ctx.fillRect(-20, -6, 40, 12); ctx.fillRect(-6, -20, 12, 40);
         } else if (player.shape === 'circle') {
-            ctx.beginPath();
-            ctx.arc(0, 0, 20, 0, Math.PI*2);
-            ctx.fill();
+            ctx.beginPath(); ctx.arc(0, 0, 20, 0, Math.PI*2); ctx.fill();
         } else if (player.shape === 'star') {
             ctx.beginPath();
             for(let i=0; i<5; i++) {
                 ctx.lineTo(Math.cos((18+i*72)/180*Math.PI)*20, -Math.sin((18+i*72)/180*Math.PI)*20);
                 ctx.lineTo(Math.cos((54+i*72)/180*Math.PI)*10, -Math.sin((54+i*72)/180*Math.PI)*10);
             }
-            ctx.closePath();
-            ctx.fill();
+            ctx.closePath(); ctx.fill();
         }
 
-        // Draw funny face
         ctx.fillStyle = '#111';
         ctx.beginPath();
-        ctx.arc(-6, -4, 3, 0, Math.PI*2); // Left eye
-        ctx.arc(6, -4, 3, 0, Math.PI*2); // Right eye
+        ctx.arc(-6, -4, 3, 0, Math.PI*2);
+        ctx.arc(6, -4, 3, 0, Math.PI*2);
         ctx.fill();
         
         ctx.strokeStyle = '#111';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(0, 4, 6, 0.2, Math.PI - 0.2); // Smile
+        ctx.arc(0, 4, 6, 0.2, Math.PI - 0.2);
         ctx.stroke();
 
         ctx.restore();
     }
 
-    // Fog of War
-    if (Object.keys(gameState.players).length > 0) {
-        if(fogCanvas.width !== canvas.width || fogCanvas.height !== canvas.height) {
-            fogCanvas.width = canvas.width;
-            fogCanvas.height = canvas.height;
-        }
-        
-        fogCtx.globalCompositeOperation = 'source-over';
-        fogCtx.fillStyle = '#050510'; 
-        fogCtx.fillRect(0, 0, fogCanvas.width, fogCanvas.height);
-        
-        fogCtx.globalCompositeOperation = 'destination-out';
-        
-        let segments = [];
-        let mapBox = [
-            {x:0,y:0}, {x:gameState.level.width, y:0},
-            {x:gameState.level.width, y:gameState.level.height}, {x:0, y:gameState.level.height}
-        ];
-        segments.push({a: mapBox[0], b: mapBox[1]});
-        segments.push({a: mapBox[1], b: mapBox[2]});
-        segments.push({a: mapBox[2], b: mapBox[3]});
-        segments.push({a: mapBox[3], b: mapBox[0]});
+    if(fogCanvas.width !== canvas.width || fogCanvas.height !== canvas.height) {
+        fogCanvas.width = canvas.width;
+        fogCanvas.height = canvas.height;
+    }
+    
+    fogCtx.globalCompositeOperation = 'source-over';
+    fogCtx.clearRect(0,0, fogCanvas.width, fogCanvas.height);
+    fogCtx.fillStyle = '#050510'; 
+    fogCtx.fillRect(0, 0, fogCanvas.width, fogCanvas.height);
+    
+    fogCtx.globalCompositeOperation = 'destination-out';
+    
+    let segments = [];
+    let mapBox = [
+        {x:0,y:0}, {x:gameState.level.width, y:0},
+        {x:gameState.level.width, y:gameState.level.height}, {x:0, y:gameState.level.height}
+    ];
+    segments.push({a: mapBox[0], b: mapBox[1]});
+    segments.push({a: mapBox[1], b: mapBox[2]});
+    segments.push({a: mapBox[2], b: mapBox[3]});
+    segments.push({a: mapBox[3], b: mapBox[0]});
 
-        const allBlocks = gameState.level.walls.concat(gameState.level.doors.filter(d=>!d.open));
-        for(let w of allBlocks) {
-            segments.push({a:{x:w.x, y:w.y}, b:{x:w.x+w.w, y:w.y}});
-            segments.push({a:{x:w.x+w.w, y:w.y}, b:{x:w.x+w.w, y:w.y+w.h}});
-            segments.push({a:{x:w.x+w.w, y:w.y+w.h}, b:{x:w.x, y:w.y+w.h}});
-            segments.push({a:{x:w.x, y:w.y+w.h}, b:{x:w.x, y:w.y}});
-        }
-
-        for(let id in gameState.players) {
-            let p = gameState.players[id];
-            let poly = calculateVisibilityPolygon({x: p.x, y: p.y}, segments);
-            
-            if(poly.length > 0) {
-                fogCtx.save();
-                fogCtx.translate(-camera.x, -camera.y);
-                fogCtx.beginPath();
-                fogCtx.moveTo(poly[0].x, poly[0].y);
-                for(let i=1; i<poly.length; i++) {
-                    fogCtx.lineTo(poly[i].x, poly[i].y);
-                }
-                fogCtx.closePath();
-                
-                let gradient = fogCtx.createRadialGradient(p.x, p.y, 20, p.x, p.y, 600);
-                gradient.addColorStop(0, 'rgba(0,0,0,1)');
-                gradient.addColorStop(1, 'rgba(0,0,0,0)');
-                
-                fogCtx.fillStyle = gradient;
-                fogCtx.fill();
-                fogCtx.restore();
-            }
-        }
-
-        ctx.restore(); 
-        ctx.drawImage(fogCanvas, 0, 0);
-        ctx.save();
-        ctx.translate(-camera.x, -camera.y);
+    const allBlocks = gameState.level.walls.concat(gameState.level.doors.filter(d=>!d.open));
+    for(let w of allBlocks) {
+        segments.push({a:{x:w.x, y:w.y}, b:{x:w.x+w.w, y:w.y}});
+        segments.push({a:{x:w.x+w.w, y:w.y}, b:{x:w.x+w.w, y:w.y+w.h}});
+        segments.push({a:{x:w.x+w.w, y:w.y+w.h}, b:{x:w.x, y:w.y+w.h}});
+        segments.push({a:{x:w.x, y:w.y+w.h}, b:{x:w.x, y:w.y}});
     }
 
-    // Walls (drawn on top of everything for crispness, but maybe shadow them)
+    for (const id in gameState.players) {
+        let p = gameState.players[id];
+        let poly = calculateVisibilityPolygon({x: p.x, y: p.y}, segments);
+        
+        if(poly.length > 0) {
+            fogCtx.save();
+            fogCtx.translate(canvas.width / 2, canvas.height / 2);
+            fogCtx.scale(camera.scale, camera.scale);
+            fogCtx.translate(-camera.x, -camera.y);
+            
+            fogCtx.beginPath();
+            fogCtx.moveTo(poly[0].x, poly[0].y);
+            for(let i=1; i<poly.length; i++) {
+                fogCtx.lineTo(poly[i].x, poly[i].y);
+            }
+            fogCtx.closePath();
+            
+            let limitRadius = 250;
+            let gradient = fogCtx.createRadialGradient(p.x, p.y, limitRadius * 0.2, p.x, p.y, limitRadius);
+            gradient.addColorStop(0, 'rgba(0,0,0,1)');
+            gradient.addColorStop(0.8, 'rgba(0,0,0,0.3)');
+            gradient.addColorStop(1, 'rgba(0,0,0,0)');
+            
+            fogCtx.fillStyle = gradient;
+            fogCtx.fill();
+            fogCtx.restore();
+        }
+    }
+
+    ctx.restore(); 
+    ctx.globalAlpha = 1.0;
+    ctx.drawImage(fogCanvas, 0, 0);
+    
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.scale(camera.scale, camera.scale);
+    ctx.translate(-camera.x, -camera.y);
+    
     ctx.fillStyle = '#111';
     for(let w of gameState.level.walls) {
         ctx.fillRect(w.x, w.y, w.w, w.h);
@@ -312,7 +357,6 @@ function draw() {
         ctx.strokeRect(w.x, w.y, w.w, w.h);
     }
 
-    // Doors
     ctx.fillStyle = '#e74c3c';
     for(let d of gameState.level.doors) {
         if(!d.open) {
@@ -324,42 +368,77 @@ function draw() {
 
     ctx.restore();
     
-    if(gameState.timeLeft !== undefined) {
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 36px Arial';
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 24px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText(`Joueurs: ${pCount}`, 20, 40);
+
+    if(gameState.status === 'starting') {
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#f1c40f';
+        ctx.font = 'bold 120px Arial';
         ctx.textAlign = 'center';
+        ctx.fillText(gameState.countdown, canvas.width/2, canvas.height/2);
+    } else if(gameState.timeLeft !== undefined) {
         let mins = Math.floor(gameState.timeLeft / 60);
         let secs = gameState.timeLeft % 60;
         let timeStr = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-        ctx.fillText(timeStr, canvas.width / 2, 50);
+        
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.beginPath();
+        let tw = 160;
+        ctx.roundRect(canvas.width/2 - tw/2, 10, tw, 60, 20);
+        ctx.fill();
+        
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 36px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(timeStr, canvas.width / 2, 52);
     }
     
     if(gameState.status === 'playing' && gameState.level.quests) {
-        ctx.fillStyle = 'rgba(20, 20, 25, 0.8)';
+        let isUnderUI = false;
+        for (const id in gameState.players) {
+            let p = gameState.players[id];
+            let sx = (p.x - camera.x) * camera.scale + canvas.width / 2;
+            let sy = (p.y - camera.y) * camera.scale + canvas.height / 2;
+            if (sx > 10 && sx < 430 && sy > 50 && sy < 270) {
+                isUnderUI = true;
+                break;
+            }
+        }
+        
+        let alpha = isUnderUI ? 0.2 : 0.8;
+        
+        ctx.fillStyle = `rgba(20, 20, 25, ${alpha})`;
         ctx.beginPath();
-        ctx.roundRect(canvas.width - 450, 20, 430, 200, 15);
+        ctx.roundRect(20, 60, 400, 200, 15);
         ctx.fill();
+        
+        ctx.globalAlpha = isUnderUI ? 0.3 : 1.0;
         ctx.strokeStyle = '#2ecc71';
         ctx.lineWidth = 2;
         ctx.stroke();
 
         ctx.fillStyle = '#f1c40f';
-        ctx.font = 'bold 24px Arial';
+        ctx.font = 'bold 20px Arial';
         ctx.textAlign = 'left';
-        ctx.fillText('🏆 Quêtes & Objectifs', canvas.width - 430, 55);
+        ctx.fillText('🏆 Quêtes & Objectifs', 40, 95);
 
-        ctx.font = 'bold 18px Arial';
-        let y = 95;
+        ctx.font = 'bold 16px Arial';
+        let y = 135;
         for(let q of gameState.level.quests) {
             if(q.done) {
                 ctx.fillStyle = '#2ecc71';
-                ctx.fillText('✅ ' + q.text, canvas.width - 430, y);
+                ctx.fillText('✅ ' + q.text, 40, y);
             } else {
                 ctx.fillStyle = '#fff';
-                ctx.fillText('⬜ ' + q.text, canvas.width - 430, y);
+                ctx.fillText('⬜ ' + q.text, 40, y);
             }
             y += 35;
         }
+        ctx.globalAlpha = 1.0; // reset
     }
     
     if(gameState.status === 'victory') {
