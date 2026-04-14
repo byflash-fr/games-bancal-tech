@@ -204,7 +204,7 @@ function updateTriggers(players, level) {
     if (qCoins) {
         qCoins.count = collectedCoins;
         let total = qCoins.total || 5;
-        qCoins.text = `Collecter \${total} sphères dorées (\${collectedCoins}/\${total})\`;
+        qCoins.text = `Collecter ${total} sphères dorées (${collectedCoins}/${total})`;
         qCoins.done = (collectedCoins >= total);
     }
 }
