@@ -248,23 +248,56 @@ function draw() {
     ctx.scale(camera.scale, camera.scale);
     ctx.translate(-camera.x, -camera.y);
 
-    // Grid
-    ctx.strokeStyle = '#2b2b36';
-    ctx.lineWidth = 2;
-    for(let i=0; i<=gameState.level.width; i+=100) {
+    // ── Fonds des salles colorées ────────────────────────────────
+    if (gameState.level.rooms) {
+        const roomColors = {
+            A: 'rgba(46, 204, 113, 0.07)',  // Spawn – vert
+            B: 'rgba(52, 152, 219, 0.07)',  // Tampon – bleu
+            C: 'rgba(230, 126, 34, 0.07)',  // Fermée – orange
+            D: 'rgba(231, 76, 60, 0.07)'    // Sortie – rouge
+        };
+        const roomLabels = {
+            A: '🏠 SPAWN',
+            B: '🔵 TAMPON',
+            C: '🟠 VERROU',
+            D: '🚪 SORTIE'
+        };
+        for (const [key, room] of Object.entries(gameState.level.rooms)) {
+            ctx.fillStyle = roomColors[key];
+            ctx.fillRect(room.x, room.y, room.w, room.h);
+            ctx.fillStyle = roomColors[key].replace('0.07', '0.25');
+            ctx.font = 'bold 28px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(roomLabels[key], room.x + room.w / 2, room.y + 60);
+        }
+    }
+
+    // Grille subtile
+    ctx.strokeStyle = '#1e1e28';
+    ctx.lineWidth = 1;
+    const gridStep = 100;
+    for(let i=0; i<=gameState.level.width; i+=gridStep) {
         ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, gameState.level.height); ctx.stroke();
     }
-    for(let i=0; i<=gameState.level.height; i+=100) {
+    for(let i=0; i<=gameState.level.height; i+=gridStep) {
         ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(gameState.level.width, i); ctx.stroke();
     }
 
-    ctx.fillStyle = gameState.level.exit.active ? '#2ecc71' : '#7f8c8d';
+    // ── Sortie ──────────────────────────────────────────────────
+    const exitGlow = gameState.level.exit.active ? '#2ecc71' : '#7f8c8d';
+    if (gameState.level.exit.active) {
+        ctx.shadowColor = '#2ecc71';
+        ctx.shadowBlur  = 30;
+    }
+    ctx.fillStyle = exitGlow;
     ctx.beginPath();
     ctx.arc(gameState.level.exit.x, gameState.level.exit.y, gameState.level.exit.r, 0, Math.PI*2);
     ctx.fill();
+    ctx.shadowBlur = 0;
     ctx.fillStyle = '#fff';
-    ctx.font = '24px bold Arial';
-    ctx.fillText("SORTIE", gameState.level.exit.x - 45, gameState.level.exit.y + 8);
+    ctx.font = 'bold 22px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('SORTIE', gameState.level.exit.x, gameState.level.exit.y + 8);
 
     for(let b of gameState.level.buttons) {
         ctx.fillStyle = b.pressed ? '#2ecc71' : b.color;
@@ -415,20 +448,50 @@ function draw() {
     ctx.scale(camera.scale, camera.scale);
     ctx.translate(-camera.x, -camera.y);
     
-    ctx.fillStyle = '#111';
+    // Murs
+    const WALL_T_THICK = 40; // les murs séparateurs / bordures sont épais (>=40)
     for(let w of gameState.level.walls) {
-        ctx.fillRect(w.x, w.y, w.w, w.h);
-        ctx.strokeStyle = '#00ffcc';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(w.x, w.y, w.w, w.h);
+        const isThick = (w.w >= WALL_T_THICK || w.h >= WALL_T_THICK) &&
+                        (Math.max(w.w, w.h) / Math.min(w.w, w.h) >= 3);
+        const isMaze = Math.min(w.w, w.h) <= 22; // mur de labyrinthe fin
+        if (isMaze) {
+            ctx.fillStyle = '#2a2a3a';
+            ctx.fillRect(w.x, w.y, w.w, w.h);
+            ctx.strokeStyle = '#3a3a55';
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(w.x, w.y, w.w, w.h);
+        } else {
+            ctx.fillStyle = '#0d0d14';
+            ctx.fillRect(w.x, w.y, w.w, w.h);
+            ctx.strokeStyle = '#00ffcc';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(w.x, w.y, w.w, w.h);
+        }
     }
 
-    ctx.fillStyle = '#e74c3c';
+    // Portes
     for(let d of gameState.level.doors) {
         if(!d.open) {
+            // Couleur basée sur le bouton lié
+            const btn = gameState.level.buttons ? gameState.level.buttons.find(b => b.id === d.linkedButton) : null;
+            const dCol = btn ? btn.color : '#e74c3c';
+            ctx.fillStyle = dCol + 'cc';
             ctx.fillRect(d.x, d.y, d.w, d.h);
-            ctx.strokeStyle = '#c0392b';
+            ctx.strokeStyle = dCol;
+            ctx.lineWidth = 2;
             ctx.strokeRect(d.x, d.y, d.w, d.h);
+            // Icône cadenas
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('🔒', d.x + d.w / 2, d.y + d.h / 2 + 7);
+        } else {
+            // Porte ouverte : trait en pointillé
+            ctx.strokeStyle = '#2ecc71';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([8, 6]);
+            ctx.strokeRect(d.x, d.y, d.w, d.h);
+            ctx.setLineDash([]);
         }
     }
 
