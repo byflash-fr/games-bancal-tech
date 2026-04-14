@@ -90,30 +90,25 @@ socket.on('stateUpdate', (state) => {
         }
         revealUI.style.display = 'none';
         controllerUI.style.display = 'none';
-        hasRevealed = false;
+    } else if (state.status === 'starting') {
+        waitingUI.style.display = 'none';
+        revealUI.style.display = 'flex';
+        controllerUI.style.display = 'none';
+        
+        if (myPlayer) {
+            drawCharacter(myPlayer);
+        }
+        revealCountdown.innerText = state.countdown;
     } else if (state.status === 'playing') {
         waitingUI.style.display = 'none';
+        revealUI.style.display = 'none';
+        controllerUI.style.display = 'flex';
         
-        if (!hasRevealed && myPlayer) {
-            hasRevealed = true;
-            revealUI.style.display = 'flex';
-            controllerUI.style.display = 'none';
-            
-            drawCharacter(myPlayer);
-            
-            let count = 5;
-            revealCountdown.innerText = count;
-            let timer = setInterval(() => {
-                count--;
-                revealCountdown.innerText = count;
-                if (count <= 0) {
-                    clearInterval(timer);
-                    revealUI.style.display = 'none';
-                    controllerUI.style.display = 'flex';
-                }
-            }, 1000);
-        } else if (hasRevealed && revealUI.style.display === 'none') {
-            controllerUI.style.display = 'flex';
+        const mt = document.getElementById('mobile-timer');
+        if (mt) {
+            let mins = Math.floor(state.timeLeft / 60);
+            let secs = state.timeLeft % 60;
+            mt.innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
         }
     }
     

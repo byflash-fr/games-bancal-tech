@@ -40,7 +40,7 @@ const PORT = process.env.PORT || 3000;
 const LOCAL_IP = getLocalIP();
 // QR Code should redirect to the IP without the port + /<code_de_la_partie>
 // We assume it's deployed on standard 80/443 port for production, but locally we useLOCAL_IP
-const BASE_URL = `http://${LOCAL_IP}`; 
+const BASE_URL = `http://games.bancal.tech`; 
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -159,8 +159,8 @@ io.on('connection', (socket) => {
         if(code && games[code]) {
             const game = games[code];
             if (game.status === 'lobby' || game.status === 'defeat' || game.status === 'victory') {
-                game.status = 'playing';
-                game.timeLeft = 300;
+                game.status = 'starting';
+                game.countdown = 5;
                 game.level = gameLogic.generateLevel(Math.max(2, Object.keys(game.players).length));
                 io.to(code).emit('stateUpdate', game);
             }
@@ -236,7 +236,15 @@ setInterval(() => {
 setInterval(() => {
     for (const code in games) {
         const gameState = games[code];
-        if (gameState.status === 'playing') {
+        if (gameState.status === 'starting') {
+            if (gameState.countdown > 0) {
+                gameState.countdown--;
+            }
+            if (gameState.countdown <= 0) {
+                gameState.status = 'playing';
+                gameState.timeLeft = 300;
+            }
+        } else if (gameState.status === 'playing') {
             gameState.timeLeft--;
             if (gameState.timeLeft <= 0) {
                 gameState.status = 'defeat';

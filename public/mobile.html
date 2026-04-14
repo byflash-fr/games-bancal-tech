@@ -20,9 +20,12 @@
         <h2 id="reveal-countdown" style="font-size: 4rem; margin-top: 40px; color: #f1c40f;">5</h2>
     </div>
 
-    <div id="controller-ui" style="display: none;">
-        <h2>Contrôleur</h2>
-        <div id="joystick-zone"></div>
+    <div id="controller-ui" style="display: none; flex-direction: column; height: 100vh;">
+        <div style="background: rgba(0,0,0,0.5); padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid rgba(255,255,255,0.1);">
+            <h2 style="margin: 0; font-size: 1.5rem;">Contrôleur</h2>
+            <div id="mobile-timer" style="font-size: 1.5rem; font-weight: bold; color: #fff;">--:--</div>
+        </div>
+        <div id="joystick-zone" style="flex: 1; position: relative;"></div>
         <div class="action-buttons">
             <button id="btnA" class="game-btn">A (Action)</button>
             <button id="btnB" class="game-btn">B (Signal)</button>

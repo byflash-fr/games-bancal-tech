@@ -1,127 +1,13 @@
-const socket = io();
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+const fs = require('fs');
 
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+const path = 'public/js/renderer.js';
+let content = fs.readFileSync(path, 'utf8');
 
-window.addEventListener('resize', () => {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-});
+const anchor = 'let camera = { x: 0, y: 0 };';
+const index = content.indexOf(anchor);
 
-const urlParams = new URLSearchParams(window.location.search);
-const pseudo = urlParams.get('pseudo') || 'Host';
-
-let gameState = { players: {}, level: null };
-
-socket.emit('createGame', { pseudo }, (response) => {
-    if(response.success) {
-        console.log("Game created:", response.code);
-    }
-});
-
-const lobbyUI = document.getElementById('lobby-ui');
-const pCountSpan = document.getElementById('player-count');
-const joinUrlText = document.getElementById('join-url-text');
-const qrCodeImg = document.getElementById('qr-code-img');
-const gameCodeDisplay = document.getElementById('game-code-display');
-const playersList = document.getElementById('players-list');
-
-socket.on('stateUpdate', (state) => {
-    gameState = state;
-    
-    if (state.status !== 'playing') {
-        if (lobbyUI) lobbyUI.style.display = 'block';
-        if (pCountSpan) pCountSpan.innerText = Object.keys(state.players).length;
-        if (gameCodeDisplay) gameCodeDisplay.innerText = state.code;
-        
-        if (playersList) {
-            playersList.innerHTML = '';
-            for(let id in state.players) {
-                let p = state.players[id];
-                playersList.innerHTML += `<li style="margin-bottom: 10px; display: flex; align-items: center;"><span style="display:inline-block; width:20px; height:20px; background:${p.color}; border-radius:50%; margin-right:15px; border:2px solid white;"></span>${p.pseudo}</li>`;
-            }
-        }
-        
-        if (state.qrCodeDataUrl && qrCodeImg.src !== state.qrCodeDataUrl) {
-            joinUrlText.innerText = state.joinUrl;
-            qrCodeImg.src = state.qrCodeDataUrl;
-            qrCodeImg.style.display = 'block';
-        }
-    } else {
-        if (lobbyUI) lobbyUI.style.display = 'none';
-    }
-});
-
-function startGame() {
-    socket.emit('startGame');
-}
-
-function getIntersection(ray, segment) {
-    const r_px = ray.a.x;
-    const r_py = ray.a.y;
-    const r_dx = ray.b.x - ray.a.x;
-    const r_dy = ray.b.y - ray.a.y;
-    const s_px = segment.a.x;
-    const s_py = segment.a.y;
-    const s_dx = segment.b.x - segment.a.x;
-    const s_dy = segment.b.y - segment.a.y;
-
-    if (r_dx * s_dy === r_dy * s_dx) return null; 
-
-    const T2 = (r_dx * (s_py - r_py) + r_dy * (r_px - s_px)) / (s_dx * r_dy - s_dy * r_dx);
-    const T1 = (s_px + s_dx * T2 - r_px) / r_dx;
-
-    if (T1 > 0 && T2 >= 0 && T2 <= 1) {
-        return {
-            x: r_px + r_dx * T1,
-            y: r_py + r_dy * T1,
-            param: T1
-        };
-    }
-    return null;
-}
-
-function calculateVisibilityPolygon(origin, segments) {
-    let points = [];
-    for(let i = 0; i < segments.length; i++) {
-        points.push(segments[i].a, segments[i].b);
-    }
-    
-    let uniqueAngles = [];
-    for(let p of points) {
-        let angle = Math.atan2(p.y - origin.y, p.x - origin.x);
-        uniqueAngles.push(angle - 0.00001, angle, angle + 0.00001);
-    }
-
-    let intersects = [];
-    for(let angle of uniqueAngles) {
-        let ray = {
-            a: origin,
-            b: { x: origin.x + Math.cos(angle)*3000, y: origin.y + Math.sin(angle)*3000 }
-        };
-
-        let closestIntersect = null;
-        for(let s of segments) {
-            let intersect = getIntersection(ray, s);
-            if(!intersect) continue;
-            if(!closestIntersect || intersect.param < closestIntersect.param) {
-                closestIntersect = intersect;
-            }
-        }
-
-        if(closestIntersect) {
-            closestIntersect.angle = angle;
-            intersects.push(closestIntersect);
-        }
-    }
-
-    intersects.sort((a,b) => a.angle - b.angle);
-    return intersects;
-}
-
-
+if (index !== -1) {
+    const newAddition = `
 let playerCameras = {}; // {id: {x,y}}
 const fogCanvas = document.createElement('canvas');
 const fogCtx = fogCanvas.getContext('2d', { willReadFrequently: true });
@@ -357,7 +243,7 @@ function draw() {
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 24px Arial';
     ctx.textAlign = 'left';
-    ctx.fillText(`Joueurs: ${pCount}`, 20, 40);
+    ctx.fillText(\`Joueurs: \${pCount}\`, 20, 40);
 
     if(gameState.status === 'starting') {
         ctx.fillStyle = 'rgba(0,0,0,0.7)';
@@ -369,7 +255,7 @@ function draw() {
     } else if(gameState.timeLeft !== undefined) {
         let mins = Math.floor(gameState.timeLeft / 60);
         let secs = gameState.timeLeft % 60;
-        let timeStr = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+        let timeStr = \`\${mins}:\${secs < 10 ? '0' : ''}\${secs}\`;
         
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
         ctx.beginPath();
@@ -432,3 +318,11 @@ function draw() {
 }
 
 draw();
+`;
+    
+    const keepContent = content.substring(0, index);
+    fs.writeFileSync(path, keepContent + newAddition);
+    console.log('Successfully updated renderer.js');
+} else {
+    console.log('Anchor not found');
+}
