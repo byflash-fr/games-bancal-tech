@@ -183,3 +183,10 @@ joystickZone.addEventListener('pointerleave', () => {
 
 btnA.addEventListener('pointerdown', () => socket.emit('input', { type: 'action', button: 'A' }));
 btnB.addEventListener('pointerdown', () => socket.emit('input', { type: 'action', button: 'B' }));
+
+function quitGame() {
+    if(confirm("Voulez-vous vraiment quitter la partie ?")) {
+        window.location.href = '/';
+    }
+}
+

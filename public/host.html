@@ -14,7 +14,7 @@
 
     <div id="lobby-ui" class="lobby-container" style="display: none;">
         <!-- LEFT SIDE: Players -->
-        <div class="lobby-side lobby-left">
+        <div class="lobby-side lobby-left" style="flex: 2;">
             <h1>Joueurs <span id="player-count" class="player-count-badge">0</span></h1>
 
             <div class="player-list-container">
@@ -25,7 +25,7 @@
         </div>
 
         <!-- RIGHT SIDE: Code & QR -->
-        <div class="lobby-side lobby-right">
+        <div class="lobby-side lobby-right" style="flex: 3;">
             <h2>Code de la Partie</h2>
             <h1 id="game-code-display">----</h1>
 
@@ -45,7 +45,17 @@
         </div>
     </div>
 
+    <!-- VICTORY UI -->
+    <div id="victory-ui" class="lobby-container flex-center" style="display: none; flex-direction: column;">
+        <h1 style="font-size: 8rem; margin-bottom: 40px;">VICTOIRE</h1>
+        <div class="lobby-buttons">
+            <button class="btn btn-primary" onclick="startGame()">Recommencer</button>
+            <button class="btn btn-outline" onclick="cancelGame()">Quitter</button>
+        </div>
+    </div>
+
     <canvas id="gameCanvas"></canvas>
+
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/renderer.js?v=2"></script>

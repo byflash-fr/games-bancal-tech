@@ -27,6 +27,8 @@ const joinUrlText = document.getElementById('join-url-text');
 const qrCodeImg = document.getElementById('qr-code-img');
 const gameCodeDisplay = document.getElementById('game-code-display');
 const playersList = document.getElementById('players-list');
+const victoryUI = document.getElementById('victory-ui');
+
 
 const backgroundMusic = new Audio('/assets/music.mp3');
 backgroundMusic.loop = true;
@@ -76,8 +78,9 @@ document.addEventListener('touchstart', unlockMusicOnFirstInteraction, { passive
 socket.on('stateUpdate', (state) => {
     gameState = state;
     
-    if (state.status === 'lobby' || state.status === 'victory' || state.status === 'defeat') {
+    if (state.status === 'lobby' || state.status === 'defeat') {
         if (lobbyUI) lobbyUI.style.display = 'block';
+        if (victoryUI) victoryUI.style.display = 'none';
         if (pCountSpan) pCountSpan.innerText = Object.keys(state.players).length;
         if (gameCodeDisplay) gameCodeDisplay.innerText = state.code;
         
@@ -94,10 +97,15 @@ socket.on('stateUpdate', (state) => {
             qrCodeImg.src = state.qrCodeDataUrl;
             qrCodeImg.style.display = 'block';
         }
+    } else if (state.status === 'victory') {
+        if (lobbyUI) lobbyUI.style.display = 'none';
+        if (victoryUI) victoryUI.style.display = 'flex';
     } else {
         if (lobbyUI) lobbyUI.style.display = 'none';
+        if (victoryUI) victoryUI.style.display = 'none';
     }
 });
+
 
 function startGame() {
     tryPlayBackgroundMusic();
@@ -499,13 +507,9 @@ function draw() {
     }
     
     if(gameState.status === 'victory') {
-        ctx.fillStyle = 'rgba(46, 204, 113, 0.8)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 80px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('VICTOIRE !', canvas.width / 2, canvas.height / 2);
+        // Now handled by victoryUI overlay
     } else if (gameState.status === 'defeat') {
+
         ctx.fillStyle = 'rgba(231, 76, 60, 0.8)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = '#fff';
