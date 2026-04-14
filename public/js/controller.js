@@ -1,5 +1,26 @@
 const socket = io();
-socket.emit('register', 'player');
+
+const urlParams = new URLSearchParams(window.location.search);
+const code = urlParams.get('code');
+const pseudo = urlParams.get('pseudo') || 'Joueur Mobile';
+
+if(!code) {
+    alert("Code manquant ! Retour à l'accueil.");
+    window.location.href = '/';
+} else {
+    socket.emit('joinGame', { code, pseudo }, (response) => {
+        if(!response.success) {
+            alert(response.message);
+            window.location.href = '/';
+        }
+    });
+}
+
+socket.on('gameClosed', () => {
+    alert("La partie a été fermée par l'hôte.");
+    window.location.href = '/';
+});
+
 
 const joystickZone = document.getElementById('joystick-zone');
 const btnA = document.getElementById('btnA');

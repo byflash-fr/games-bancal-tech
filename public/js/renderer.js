@@ -10,14 +10,23 @@ window.addEventListener('resize', () => {
     canvas.height = window.innerHeight;
 });
 
+const urlParams = new URLSearchParams(window.location.search);
+const pseudo = urlParams.get('pseudo') || 'Host';
+
 let gameState = { players: {}, level: null };
 
-socket.emit('register', 'observer');
+socket.emit('createGame', { pseudo }, (response) => {
+    if(response.success) {
+        console.log("Game created:", response.code);
+    }
+});
 
 const lobbyUI = document.getElementById('lobby-ui');
 const pCountSpan = document.getElementById('player-count');
 const joinUrlText = document.getElementById('join-url-text');
 const qrCodeImg = document.getElementById('qr-code-img');
+const gameCodeDisplay = document.getElementById('game-code-display');
+const playersList = document.getElementById('players-list');
 
 socket.on('stateUpdate', (state) => {
     gameState = state;
@@ -25,6 +34,15 @@ socket.on('stateUpdate', (state) => {
     if (state.status !== 'playing') {
         if (lobbyUI) lobbyUI.style.display = 'block';
         if (pCountSpan) pCountSpan.innerText = Object.keys(state.players).length;
+        if (gameCodeDisplay) gameCodeDisplay.innerText = state.code;
+        
+        if (playersList) {
+            playersList.innerHTML = '';
+            for(let id in state.players) {
+                let p = state.players[id];
+                playersList.innerHTML += `<li style="margin-bottom: 10px; display: flex; align-items: center;"><span style="display:inline-block; width:20px; height:20px; background:${p.color}; border-radius:50%; margin-right:15px; border:2px solid white;"></span>${p.pseudo}</li>`;
+            }
+        }
         
         if (state.qrCodeDataUrl && qrCodeImg.src !== state.qrCodeDataUrl) {
             joinUrlText.innerText = state.joinUrl;
