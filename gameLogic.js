@@ -18,11 +18,11 @@ function generateLevel(playerCount) {
     level.walls.push({ x: 1950, y: 0, w: 50, h: 2000 });
 
     let isSticky = (playerCount <= 1);
-    
+
     // Cross partition coordinates
     let jx = 600 + Math.random() * 800; // 600 to 1400
     let jy = 600 + Math.random() * 800;
-    
+
     let gapW = 200;
 
     // Door configurations
@@ -50,12 +50,12 @@ function generateLevel(playerCount) {
     level.walls.push({ x: d2x + gapW, y: jy, w: 2000 - (d2x + gapW), h: 50 });
 
     // Scatter 15 random obstacles
-    for(let i=0; i<15; i++) {
+    for (let i = 0; i < 15; i++) {
         let w = 50 + Math.random() * 200;
         let h = 50 + Math.random() * 200;
         let x = 100 + Math.random() * 1600;
         let y = 100 + Math.random() * 1600;
-        
+
         // Don't block Spawn (0-400, 0-400)
         if (x < 400 && y < 400) continue;
         // Don't block Exit (1600-2000, 1600-2000)
@@ -70,7 +70,7 @@ function generateLevel(playerCount) {
     // Button 1 in Bottom-Left (Room 3)
     let b1x = 100 + Math.random() * (jx - 200);
     let b1y = jy + 100 + Math.random() * (1800 - jy);
-    
+
     // Button 2 in Top-Right (Room 2)
     let b2x = jx + 100 + Math.random() * (1800 - jx);
     let b2y = 100 + Math.random() * (jy - 200);
@@ -78,15 +78,15 @@ function generateLevel(playerCount) {
     let reqRed = Math.max(1, Math.ceil(playerCount / 2));
     let reqBlue = Math.max(1, Math.floor(playerCount / 2));
 
-    level.buttons.push({ id: 1, x: b1x, y: b1y, r: 40, reqShape: null, reqCount: reqRed, color: '#e74c3c', pressed: false, currentCount: 0, sticky: isSticky }); 
-    level.buttons.push({ id: 2, x: b2x, y: b2y, r: 50, reqCount: reqBlue, color: '#3498db', pressed: false, currentCount: 0, sticky: isSticky }); 
+    level.buttons.push({ id: 1, x: b1x, y: b1y, r: 40, reqShape: null, reqCount: reqRed, color: '#e74c3c', pressed: false, currentCount: 0, sticky: isSticky });
+    level.buttons.push({ id: 2, x: b2x, y: b2y, r: 50, reqCount: reqBlue, color: '#3498db', pressed: false, currentCount: 0, sticky: isSticky });
 
     let coinCount = Math.max(Math.min(5, playerCount * 2), 3); // 3 to 10 depending on players
-    for(let i=0; i<coinCount; i++) {
-        level.coins.push({ 
-            x: 100 + Math.random() * 1800, 
-            y: 100 + Math.random() * 1800, 
-            collected: false 
+    for (let i = 0; i < coinCount; i++) {
+        level.coins.push({
+            x: 100 + Math.random() * 1800,
+            y: 100 + Math.random() * 1800,
+            collected: false
         });
     }
 
@@ -101,7 +101,7 @@ function generateLevel(playerCount) {
 }
 
 function checkWallCollision(p, walls, doors) {
-    const pr = 20; 
+    const pr = 20;
     let allObstacles = walls.concat(doors.filter(d => !d.open));
 
     for (let w of allObstacles) {
@@ -116,7 +116,7 @@ function checkWallCollision(p, walls, doors) {
 
         let distX = p.x - testX;
         let distY = p.y - testY;
-        let distance = Math.sqrt((distX*distX) + (distY*distY));
+        let distance = Math.sqrt((distX * distX) + (distY * distY));
 
         if (distance <= pr) {
             return true;
@@ -130,19 +130,19 @@ function applyPhysics(player, level) {
     let oldX = player.x;
     player.x = newX;
     if (checkWallCollision(player, level.walls, level.doors)) {
-        player.x = oldX; 
+        player.x = oldX;
     }
 
     let newY = player.y + player.vy * 5;
     let oldY = player.y;
     player.y = newY;
     if (checkWallCollision(player, level.walls, level.doors)) {
-        player.y = oldY; 
+        player.y = oldY;
     }
 }
 
 function updateTriggers(players, level) {
-    for(let b of level.buttons) {
+    for (let b of level.buttons) {
         if (!b.sticky || !b.pressed) {
             b.pressed = false;
         }
@@ -150,19 +150,19 @@ function updateTriggers(players, level) {
     }
 
     let pList = Object.values(players);
-    for(let p of pList) {
-        for(let b of level.buttons) {
+    for (let p of pList) {
+        for (let b of level.buttons) {
             let dx = p.x - b.x;
             let dy = p.y - b.y;
-            let dist = Math.sqrt(dx*dx + dy*dy);
-            
-            if(dist < b.r + 20) {
-                if(b.reqShape && p.shape === b.reqShape) {
+            let dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist < b.r + 20) {
+                if (b.reqShape && p.shape === b.reqShape) {
                     b.pressed = true;
                 }
-                if(b.reqCount) {
+                if (b.reqCount) {
                     b.currentCount++;
-                    if(b.currentCount >= b.reqCount) b.pressed = true;
+                    if (b.currentCount >= b.reqCount) b.pressed = true;
                 } else if (!b.reqShape) {
                     b.pressed = true;
                 }
@@ -170,41 +170,41 @@ function updateTriggers(players, level) {
         }
     }
 
-    for(let d of level.doors) {
+    for (let d of level.doors) {
         let btn = level.buttons.find(b => b.id === d.linkedButton);
-        if(btn && btn.pressed) {
+        if (btn && btn.pressed) {
             d.open = true;
         } else {
             d.open = false;
         }
     }
-    
+
     let collectedCoins = 0;
     let pListArray = Object.values(players);
-    for(let c of level.coins) {
-        if(!c.collected) {
-            for(let p of pListArray) {
+    for (let c of level.coins) {
+        if (!c.collected) {
+            for (let p of pListArray) {
                 let dx = p.x - c.x;
                 let dy = p.y - c.y;
-                if(Math.sqrt(dx*dx + dy*dy) < 35) { 
+                if (Math.sqrt(dx * dx + dy * dy) < 35) {
                     c.collected = true;
                 }
             }
         }
-        if(c.collected) collectedCoins++;
+        if (c.collected) collectedCoins++;
     }
 
     let qBtn1 = level.quests.find(q => q.id === "btn1");
-    if(qBtn1) qBtn1.done = level.buttons.find(b=>b.id===1)?.pressed || false;
+    if (qBtn1) qBtn1.done = level.buttons.find(b => b.id === 1)?.pressed || false;
 
     let qBtn2 = level.quests.find(q => q.id === "btn2");
-    if(qBtn2) qBtn2.done = level.buttons.find(b=>b.id===2)?.pressed || false;
+    if (qBtn2) qBtn2.done = level.buttons.find(b => b.id === 2)?.pressed || false;
 
     let qCoins = level.quests.find(q => q.id === "coins");
-    if(qCoins) {
+    if (qCoins) {
         qCoins.count = collectedCoins;
         let total = qCoins.total || 5;
-        qCoins.text = \`Collecter \${total} sphères dorées (\${collectedCoins}/\${total})\`;
+        qCoins.text = `Collecter \${total} sphères dorées (\${collectedCoins}/\${total})\`;
         qCoins.done = (collectedCoins >= total);
     }
 }
