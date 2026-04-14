@@ -5,18 +5,99 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Bancal - Controller</title>
     <link rel="stylesheet" href="/css/style.css">
+    <script src="https://cloud.byflash.fr/kilez.js"></script>
+    <style>
+        .mobile-bg {
+            background: radial-gradient(circle at center, var(--bg-slate), var(--bg-deep));
+            padding: 20px;
+            justify-content: space-between;
+        }
+        #waiting-ui, #reveal-ui {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-deep);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 40px;
+        }
+        .status-badge {
+            background: var(--glass);
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 1px solid var(--glass-border);
+            font-size: 0.8rem;
+            color: var(--accent-gold);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+        }
+        #mobile-timer {
+            font-family: 'Playfair Display', serif;
+            font-size: 2.5rem;
+            color: var(--accent-gold);
+        }
+    </style>
 </head>
 <body class="mobile-bg">
-    <div id="controller-ui">
-        <h2>Contrôleur</h2>
-        <div id="joystick-zone"></div>
-        <div class="action-buttons">
-            <button id="btnA" class="game-btn">A (Action)</button>
-            <button id="btnB" class="game-btn">B (Signal)</button>
-        </div>
+    <!-- Global Loader -->
+    <div id="global-loader">
+        <div class="loader-ring"></div>
+        <div class="loader-text">Synchro Manette...</div>
     </div>
-    
+
+    <!-- Waiting Screen -->
+    <div id="waiting-ui">
+        <div class="status-badge">En Attente</div>
+        <h2 style="margin-bottom: 20px;">Prêt pour l'épopée ?</h2>
+        <p style="color: var(--text-muted); margin-bottom: 40px;">Le capitaine va lancer la partie d'un instant à l'autre.</p>
+        <button onclick="window.location.href='/'" class="btn-noble btn-outline">Quitter</button>
+    </div>
+
+    <!-- Reveal Screen -->
+    <div id="reveal-ui" style="display: none;">
+        <div class="status-badge">Votre Rôle</div>
+        <h2 style="margin-bottom: 20px;">Voici votre personnage</h2>
+        <div id="character-preview" style="width: 150px; height: 150px; margin: 30px 0; border-radius: 20px; background: var(--glass); display: flex; align-items: center; justify-content: center; border: 1px solid var(--glass-border);">
+            <canvas id="character-canvas" width="150" height="150"></canvas>
+        </div>
+        <p id="player-pseudo-display" style="font-weight: 600; font-size: 1.5rem;"></p>
+        <div id="starting-timer" style="margin-top: 20px; font-size: 3rem; color: var(--accent-gold);">5</div>
+    </div>
+
+    <!-- Actual Controller -->
+    <div id="controller-ui" style="display: none; height: 100%; display: flex; flex-direction: column;">
+        <header style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 20px; border-bottom: 1px solid var(--glass-border);">
+            <div>
+                <p style="color: var(--text-muted); font-size: 0.7rem; text-transform: uppercase;">Temps Restant</p>
+                <div id="mobile-timer">05:00</div>
+            </div>
+            <div id="character-mini-icon" style="width: 40px; height: 40px; border-radius: 8px;"></div>
+        </header>
+
+        <main style="flex: 1; display: flex; flex-direction: column; gap: 20px; padding: 40px 0;">
+            <div id="joystick-zone" style="flex: 1; background: var(--glass); border: 2px solid var(--glass-border); border-radius: 40px; display: flex; align-items: center; justify-content: center;">
+                <span style="color: var(--text-muted); font-size: 0.8rem; pointer-events: none;">JOYSTICK</span>
+            </div>
+
+            <div class="action-buttons" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; height: 120px;">
+                <button id="btnA" class="btn-noble" style="height: 100%; font-size: 1.5rem;">A</button>
+                <button id="btnB" class="btn-noble" style="background: #ef4444; color: white; height: 100%; font-size: 1.5rem;">B</button>
+            </div>
+        </main>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/controller.js"></script>
+    <script>
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                document.body.classList.add('loaded');
+            }, 800);
+        });
+    </script>
 </body>
 </html>
