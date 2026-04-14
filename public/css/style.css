@@ -380,23 +380,27 @@ canvas {
 }
 
 .lobby-side {
-    flex: 1;
     padding: 60px;
     display: flex;
     flex-direction: column;
+    margin: 40px;
+    border-radius: 40px;
+    background: var(--bg-card);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-noble);
 }
 
 .lobby-left {
-    border-right: 1px solid var(--glass-border);
-    backdrop-filter: blur(10px);
-    background: rgba(255, 255, 255, 0.01);
+    flex: 2;
 }
 
 .lobby-right {
+    flex: 3;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.2);
 }
+
 
 .player-count-badge {
     background: var(--primary);

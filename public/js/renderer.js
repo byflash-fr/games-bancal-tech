@@ -79,9 +79,10 @@ socket.on('stateUpdate', (state) => {
     gameState = state;
     
     if (state.status === 'lobby' || state.status === 'defeat') {
-        if (lobbyUI) lobbyUI.style.display = 'block';
+        if (lobbyUI) lobbyUI.style.display = 'flex';
         if (victoryUI) victoryUI.style.display = 'none';
         if (pCountSpan) pCountSpan.innerText = Object.keys(state.players).length;
+
         if (gameCodeDisplay) gameCodeDisplay.innerText = state.code;
         
         if (playersList) {
