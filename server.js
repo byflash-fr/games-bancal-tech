@@ -64,7 +64,13 @@ function generateGameCode() {
     return code;
 }
 
-const TICK_RATE = 1000 / 165; // 165 FPS
+function normalizePseudo(rawPseudo, fallback) {
+    if (typeof rawPseudo !== 'string') return fallback;
+    const cleaned = rawPseudo.trim().slice(0, 15);
+    return cleaned || fallback;
+}
+
+const TICK_RATE = 1000 / 120; // 165 FPS
 
 io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
@@ -72,10 +78,11 @@ io.on('connection', (socket) => {
     socket.on('createGame', (data, callback) => {
         const code = generateGameCode();
         const joinUrl = `${BASE_URL}/${code}`;
+        const hostPseudo = normalizePseudo(data?.pseudo, 'Le Chef');
         
         games[code] = {
             code: code,
-            hostName: data.pseudo || 'Le Chef',
+            hostName: hostPseudo,
             status: 'lobby',
             timeLeft: 300,
             players: {},
@@ -99,11 +106,12 @@ io.on('connection', (socket) => {
         socket.role = 'host';
         
         callback({ success: true, code: code });
-        console.log(`Game created: ${code} by ${data.pseudo}`);
+        console.log(`Game created: ${code} by ${hostPseudo}`);
     });
 
     socket.on('joinGame', (data, callback) => {
         let code = data.code ? data.code.toUpperCase() : null;
+        const playerPseudo = normalizePseudo(data?.pseudo, 'Joueur Mobile');
         if (!code || !games[code]) {
             callback({ success: false, message: 'Partie introuvable' });
             return;
@@ -119,7 +127,7 @@ io.on('connection', (socket) => {
         // Handle duplicate pseudo from same location (IP)
         const clientIp = socket.handshake.address;
         for (const [id, player] of Object.entries(game.players)) {
-            if (player.pseudo === data.pseudo) {
+            if (player.pseudo === playerPseudo) {
                 // If it's the same IP, we assume it's a reconnection/refresh
                 // We remove the old one to let the new one in
                 delete game.players[id];
@@ -155,7 +163,7 @@ io.on('connection', (socket) => {
         const spawnY = (game.level && game.level.spawnY) ? game.level.spawnY : 100;
         game.players[socket.id] = {
             id: socket.id,
-            pseudo: data.pseudo || `Joueur ${pCount + 1}`,
+            pseudo: playerPseudo || `Joueur ${pCount + 1}`,
             x: spawnX,
             y: spawnY,
             vx: 0,
@@ -167,7 +175,7 @@ io.on('connection', (socket) => {
         
         io.to(code).emit('stateUpdate', game);
         callback({ success: true, code: code });
-        console.log(`Player ${data.pseudo} joined ${code}`);
+        console.log(`Player ${playerPseudo} joined ${code}`);
     });
 
     socket.on('startGame', () => {
