@@ -30,8 +30,10 @@ function generateLevel(playerCount) {
     level.walls.push({ x: 800, y: 800, w: 50, h: 400 });
 
     // Buttons: Ensure reqShape is possible or just rely on reqCount
-    level.buttons.push({ id: 1, x: 1000, y: 200, r: 40, reqShape: null, color: '#e74c3c', pressed: false }); 
-    level.buttons.push({ id: 2, x: 600, y: 1800, r: 50, reqCount: Math.min(2, playerCount), color: '#3498db', pressed: false, currentCount: 0 }); 
+    let reqRed = Math.max(1, Math.ceil(playerCount / 2));
+    let reqBlue = Math.max(1, Math.floor(playerCount / 2));
+    level.buttons.push({ id: 1, x: 1000, y: 200, r: 40, reqShape: null, reqCount: reqRed, color: '#e74c3c', pressed: false, currentCount: 0 }); 
+    level.buttons.push({ id: 2, x: 600, y: 1800, r: 50, reqCount: reqBlue, color: '#3498db', pressed: false, currentCount: 0 }); 
 
     level.doors.push({ id: 1, x: 1200, y: 1200, w: 50, h: 300, linkedButton: 1, open: false });
     level.doors.push({ id: 2, x: 1600, y: 1500, w: 400, h: 50, linkedButton: 2, open: false }); 
@@ -43,8 +45,8 @@ function generateLevel(playerCount) {
     level.coins.push({ x: 1500, y: 1800, collected: false });
 
     level.quests = [
-        { id: "btn1", text: "Activer le bouton Rouge", done: false },
-        { id: "btn2", text: `Mode Coop : activer plaque Bleue (${Math.min(2, playerCount)} j.)`, done: false },
+        { id: "btn1", text: `Mode Coop : activer plaque Rouge (${reqRed} j.)`, done: false },
+        { id: "btn2", text: `Mode Coop : activer plaque Bleue (${reqBlue} j.)`, done: false },
         { id: "coins", text: "Collecter 5 sphères dorées (0/5)", done: false, count: 0, total: 5 },
         { id: "exit", text: "Rejoindre tous la SORTIE", done: false }
     ];
@@ -113,6 +115,8 @@ function updateTriggers(players, level) {
                 if(b.reqCount) {
                     b.currentCount++;
                     if(b.currentCount >= b.reqCount) b.pressed = true;
+                } else if (!b.reqShape) {
+                    b.pressed = true;
                 }
             }
         }

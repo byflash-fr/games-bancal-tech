@@ -249,6 +249,12 @@ function draw() {
             ctx.shadowBlur = Math.min(20, player.actionBlink * 3);
         }
 
+        if (player.disconnected) {
+            ctx.globalAlpha = 0.4;
+            ctx.fillStyle = '#7f8c8d';
+            ctx.fillText('🔴', 0, -10);
+        }
+
         if (player.shape === 'square') {
             ctx.fillRect(-20, -20, 40, 40);
         } else if (player.shape === 'triangle') {
@@ -398,10 +404,25 @@ function draw() {
     }
     
     if(gameState.status === 'playing' && gameState.level.quests) {
-        ctx.fillStyle = 'rgba(20, 20, 25, 0.8)';
+        let isUnderUI = false;
+        for (const id in gameState.players) {
+            let p = gameState.players[id];
+            let sx = (p.x - camera.x) * camera.scale + canvas.width / 2;
+            let sy = (p.y - camera.y) * camera.scale + canvas.height / 2;
+            if (sx > 10 && sx < 430 && sy > 50 && sy < 270) {
+                isUnderUI = true;
+                break;
+            }
+        }
+        
+        let alpha = isUnderUI ? 0.2 : 0.8;
+        
+        ctx.fillStyle = `rgba(20, 20, 25, ${alpha})`;
         ctx.beginPath();
         ctx.roundRect(20, 60, 400, 200, 15);
         ctx.fill();
+        
+        ctx.globalAlpha = isUnderUI ? 0.3 : 1.0;
         ctx.strokeStyle = '#2ecc71';
         ctx.lineWidth = 2;
         ctx.stroke();
@@ -423,6 +444,7 @@ function draw() {
             }
             y += 35;
         }
+        ctx.globalAlpha = 1.0; // reset
     }
     
     if(gameState.status === 'victory') {
