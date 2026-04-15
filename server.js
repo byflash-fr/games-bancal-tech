@@ -70,7 +70,7 @@ function normalizePseudo(rawPseudo, fallback) {
     return cleaned || fallback;
 }
 
-const TICK_RATE = 60;// 60 FPS
+const TICK_RATE = 20;// 60 FPS
 
 io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
@@ -124,21 +124,40 @@ io.on('connection', (socket) => {
             return;
         }
 
-        // Handle duplicate pseudo from same location (IP)
         const clientIp = socket.handshake.address;
-        for (const [id, player] of Object.entries(game.players)) {
+        let reconnected = false;
+
+        // Gestion des reconnexions
+        for (const [oldId, player] of Object.entries(game.players)) {
             if (player.pseudo === playerPseudo) {
-                // If it's the same IP, we assume it's a reconnection/refresh
-                // We remove the old one to let the new one in
-                delete game.players[id];
-                console.log(`Removed duplicate player ${player.pseudo} (old socket: ${id})`);
+                // On annule la suppression du personnage si elle était programmée
+                if (disconnectTimeouts[oldId]) {
+                    clearTimeout(disconnectTimeouts[oldId]);
+                    delete disconnectTimeouts[oldId];
+                }
+                
+                // On transfère l'ancien personnage sur la nouvelle connexion
+                player.id = socket.id;
+                game.players[socket.id] = player;
+                delete game.players[oldId];
+                
+                reconnected = true;
+                console.log(`Joueur ${player.pseudo} reconnecté avec succès !`);
+                break;
             }
         }
         
         socket.join(code);
         socket.gameCode = code;
         socket.role = 'player';
-        socket.clientIp = clientIp; // Store for future reference if needed
+        socket.clientIp = clientIp;
+        
+        // S'il s'est reconnecté, on arrête la fonction ici
+        if (reconnected) {
+            io.to(code).emit('stateUpdate', game);
+            callback({ success: true, code: code });
+            return;
+        }
         
         const shapes = ['square', 'triangle', 'circle', 'cross', 'star'];
         const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f1c40f', '#9b59b6'];
@@ -161,21 +180,8 @@ io.on('connection', (socket) => {
         
         const spawnX = (game.level && game.level.spawnX) ? game.level.spawnX + pCount * 55 : 100 + pCount * 55;
         const spawnY = (game.level && game.level.spawnY) ? game.level.spawnY : 100;
-        game.players[socket.id] = {
-            id: socket.id,
-            pseudo: playerPseudo || `Joueur ${pCount + 1}`,
-            x: spawnX,
-            y: spawnY,
-            vx: 0,
-            vy: 0,
-            actionBlink: 0,
-            color: chosenColor,
-            shape: chosenShape
-        };
         
-        io.to(code).emit('stateUpdate', game);
-        callback({ success: true, code: code });
-        console.log(`Player ${playerPseudo} joined ${code}`);
+        // Création UNIQUE et COMPLÈTE du joueur
         game.players[socket.id] = {
             id: socket.id,
             pseudo: playerPseudo || `Joueur ${pCount + 1}`,
@@ -186,10 +192,14 @@ io.on('connection', (socket) => {
             actionBlink: 0,
             color: chosenColor,
             shape: chosenShape,
-            // NOUVELLES PROPRIÉTÉS POUR LES PIÈGES
             hp: 2,
             isDead: false,
-            invuln: 0};
+            invuln: 0
+        };
+        
+        io.to(code).emit('stateUpdate', game);
+        callback({ success: true, code: code });
+        console.log(`Player ${playerPseudo} joined ${code}`);
     });
 
     socket.on('startGame', () => {
@@ -235,41 +245,48 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('disconnect', () => {
+socket.on('disconnect', () => {
         console.log(`User disconnected: ${socket.id}`);
         const code = socket.gameCode;
         if(code && games[code]) {
             if (socket.role === 'host') {
-                // Host left, terminate game
+                // L'écran principal a quitté
                 io.to(code).emit('gameClosed');
                 delete games[code];
                 console.log(`Game ${code} closed because host left.`);
             } else if (socket.role === 'player') {
-                // Player left
-                if(games[code].players[socket.id]) {
-                    delete games[code].players[socket.id];
-                    
-                    // Only end the game if no players left AND game is in progress
-                    const currentPlayersCount = Object.keys(games[code].players).length;
-                    const gameInProgress = games[code].status === 'starting' || games[code].status === 'playing';
-                    
-                    if (currentPlayersCount === 0 && gameInProgress) {
-                        console.log(`Game ${code} ended because all players left during gameplay.`);
-                        io.to(code).emit('gameClosed', { reason: 'no-players' });
-                        delete games[code];
-                    } else if (gameInProgress) {
-                        // ADAPTATION DYNAMIQUE : On met à jour les quêtes et les boutons
-                        gameLogic.adjustDifficulty(games[code].level, currentPlayersCount);
-                        io.to(code).emit('stateUpdate', games[code]);
-                        console.log(`Game ${code} dynamically adjusted for ${currentPlayersCount} players.`);
-                    } else {
-                        io.to(code).emit('stateUpdate', games[code]);
-                    }
+                const player = games[code].players[socket.id];
+                if(player) {
+                    // On ne supprime pas le joueur de suite, on lui laisse 10 secondes
+                    disconnectTimeouts[socket.id] = setTimeout(() => {
+                        // S'il n'est pas revenu après 10s, on le supprime pour de bon
+                        if (games[code] && games[code].players[socket.id]) {
+                            delete games[code].players[socket.id];
+                            
+                            const currentPlayersCount = Object.keys(games[code].players).length;
+                            const gameInProgress = games[code].status === 'starting' || games[code].status === 'playing';
+                            
+                            if (gameInProgress) {
+                                // RÈGLE DES 2 JOUEURS : Si moins de 2 joueurs restants, on coupe tout
+                                if (currentPlayersCount < 2) {
+                                    console.log(`Game ${code} ended because not enough players left.`);
+                                    io.to(code).emit('gameClosed', { reason: 'not-enough-players' });
+                                    delete games[code];
+                                } else {
+                                    // Sinon, on ajuste la difficulté pour ceux qui restent
+                                    gameLogic.adjustDifficulty(games[code].level, currentPlayersCount);
+                                    io.to(code).emit('stateUpdate', games[code]);
+                                    console.log(`Game ${code} dynamically adjusted for ${currentPlayersCount} players.`);
+                                }
+                            } else {
+                                io.to(code).emit('stateUpdate', games[code]);
+                            }
+                        }
+                    }, 10000); // 10000 millisecondes = 10 secondes
                 }
             }
         }
     });
-});
 
 // Physics & Game Loop
 setInterval(() => {

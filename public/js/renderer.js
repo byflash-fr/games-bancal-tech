@@ -39,6 +39,9 @@ walkingSound.loop = true;
 walkingSound.preload = 'auto';
 walkingSound.volume = 0.4;
 
+const coinImg = new Image();
+coinImg.src = '/assets/images/piece.png';
+
 function tryPlayBackgroundMusic() {
     if (!backgroundMusic.paused) return;
     backgroundMusic.play().catch(() => {
@@ -321,15 +324,25 @@ function draw() {
         }
     }
 
+    let frameIndex = Math.floor(Date.now() / 100) % 10; // 10 frames d'animation pour la pièce
     for(let c of gameState.level.coins) {
         if(!c.collected) {
-            ctx.fillStyle = '#f1c40f';
-            ctx.beginPath();
-            ctx.arc(c.x, c.y, 15, 0, Math.PI*2);
-            ctx.fill();
-            ctx.strokeStyle = '#f39c12';
-            ctx.lineWidth = 3;
-            ctx.stroke();
+            if (coinImg.complete && coinImg.width > 0) {
+                let frameW = coinImg.width / 10; // On divise l'image par les 10 frames
+                let frameH = coinImg.height;
+                let drawW = 32; // Taille d'affichage
+                let drawH = 32;
+                ctx.drawImage(coinImg, frameIndex * frameW, 0, frameW, frameH, c.x - drawW/2, c.y - drawH/2, drawW, drawH);
+            } else {
+                // Fallback de sécurité si l'image n'est pas encore chargée
+                ctx.fillStyle = '#f1c40f';
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, 15, 0, Math.PI*2);
+                ctx.fill();
+                ctx.strokeStyle = '#f39c12';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
         }
     }
 
