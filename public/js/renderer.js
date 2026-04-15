@@ -98,10 +98,10 @@ function getColoredBille(hexColor) {
     return buffer;
 }
 
-function drawSprite(anim, cx, cy, size) {
+function drawSprite(anim, cx, cy, size, frame = null) {
     const img = RES[anim.key];
     if (!img.complete || !img.naturalWidth) return false;
-    const fi = Math.floor(Date.now() / anim.speed) % anim.frames;
+    const fi = (frame !== null) ? frame : (Math.floor(Date.now() / anim.speed) % anim.frames);
     const fw = img.naturalWidth / anim.frames;
     ctx.drawImage(img, fi * fw, 0, fw, img.naturalHeight,
         cx - size / 2, cy - size / 2, size, size);
@@ -484,7 +484,8 @@ function drawHeart(h) {
 function drawTrap(t) {
     // On dessine le piège comme un sprite 40×40 centré sur t.x, t.y
     // On choisit pikkux (horizontal) ou pikkuy (vertical)
-    const ok = drawSprite(ANIM.pikkux, t.x, t.y, TILE);
+    const anim = (t.w > t.h) ? ANIM.pikkux : ANIM.pikkuy;
+    const ok = drawSprite(anim, t.x, t.y, TILE, 0); // Frame 0 pour désactiver l'animation
     if (!ok) {
         ctx.fillStyle = '#c0392b';
         ctx.fillRect(t.x - TILE / 2, t.y - TILE / 2, TILE, TILE);
