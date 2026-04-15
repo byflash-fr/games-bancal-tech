@@ -60,7 +60,7 @@ const ANIM = {
     pikkux: { key: 'pikkux', frames: 4, speed: 120 },
     pikkuy: { key: 'pikkuy', frames: 4, speed: 120 },
     sortie: { key: 'sortie', frames: 9, speed: 150 },
-    bille: { key: 'bille', frames: 20, speed: 150 } 
+    bille: { key: 'bille', frames: 20, speed: 150 }
 };
 
 // Cache pour ne pas recalculer les sprites colorés à chaque frame
@@ -68,7 +68,7 @@ const coloredBilleCache = {};
 
 function getColoredBille(hexColor) {
     if (coloredBilleCache[hexColor]) return coloredBilleCache[hexColor];
-    
+
     const baseImg = RES['bille'];
     if (!baseImg || !baseImg.complete || baseImg.naturalWidth === 0) return null;
 
@@ -186,13 +186,13 @@ function renderTilemap(level, layerType) {
                         ctx.fillRect(px, py, TILE, TILE);
                     }
                 }
-            } 
+            }
             else if (layerType === 'murs') {
                 if (id === T.MUR || isDoor) {
                     // Mur autotile depuis feuille.png (ligne 3, y = 2*TILE pour les murs dorés)
                     const bitmask = isDoor ? 0 : (tileAppearance[r][c] || 0);
                     const srcX = bitmask * TILE;
-                    const srcY = 2 * TILE; 
+                    const srcY = 2 * TILE;
                     if (feuilleOk) {
                         ctx.drawImage(imgFeuille, srcX, srcY, TILE, TILE, px, py, TILE, TILE);
                     } else {
@@ -375,12 +375,12 @@ function drawPlayer(p) {
 
     // --- RENDU DU SPRITE BILLE ---
     const coloredCanvas = getColoredBille(p.color);
-    
+
     if (coloredCanvas) {
         // Animation : On utilise la vitesse du joueur pour animer la bille 
         // Si vx et vy = 0, la frame reste fixe
         const isMoving = (p.vx !== 0 || p.vy !== 0);
-        
+
         let frameIndex = 0;
         if (isMoving) {
             frameIndex = Math.floor(Date.now() / ANIM.bille.speed) % ANIM.bille.frames;
@@ -400,7 +400,7 @@ function drawPlayer(p) {
             ctx.shadowBlur = Math.min(20, p.actionBlink * 3);
         }
 
-        ctx.drawImage(coloredCanvas, frameIndex * fw, 0, fw, coloredCanvas.height, -size/2, -size/2, size, size);
+        ctx.drawImage(coloredCanvas, frameIndex * fw, 0, fw, coloredCanvas.height, -size / 2, -size / 2, size, size);
     } else {
         // Fallback si l'image n'est pas encore chargée
         ctx.fillStyle = p.color;
@@ -670,7 +670,7 @@ socket.on('stateUpdate', (state) => {
                 const p = state.players[id];
                 const coloredBille = getColoredBille(p.color);
                 let imgHtml = `<span style="display:inline-block;width:24px;height:24px;background:${p.color};border-radius:50%;margin-right:15px;border:2px solid white;"></span>`;
-                
+
                 if (coloredBille) {
                     // Pour le lobby on va créer des petits canvas dynamiquement ou juste utiliser le fallback couleur si trop complexe
                     // Ici on va injecter un canvas id pour le remplir après
@@ -679,7 +679,7 @@ socket.on('stateUpdate', (state) => {
 
                 playersList.innerHTML += `<li style="margin-bottom:12px;display:flex;align-items:center;font-size:1.2rem;font-weight:bold;">
                   ${imgHtml}${p.pseudo}</li>`;
-                
+
                 if (coloredBille) {
                     setTimeout(() => {
                         const iconCanvas = document.getElementById(`bille-icon-${id}`);
@@ -694,7 +694,7 @@ socket.on('stateUpdate', (state) => {
             }
 
             // Preview pour "soi-même" si on est sur cet écran
-            const myPlayer = state.players[socket.id]; 
+            const myPlayer = state.players[socket.id];
             const previewSection = document.getElementById('preview-section');
             if (myPlayer) {
                 if (previewSection) previewSection.style.display = 'flex';
@@ -703,7 +703,7 @@ socket.on('stateUpdate', (state) => {
                     const previewCanvas = document.getElementById('my-bille-preview');
                     if (previewCanvas) {
                         const pCtx = previewCanvas.getContext('2d');
-                        pCtx.clearRect(0,0,previewCanvas.width, previewCanvas.height);
+                        pCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
                         const fw = coloredBille.width / ANIM.bille.frames;
                         pCtx.drawImage(coloredBille, 0, 0, fw, coloredBille.height, 0, 0, previewCanvas.width, previewCanvas.height);
                     }
@@ -813,7 +813,7 @@ function draw() {
     ctx.translate(canvas.width / 2, canvas.height / 2);
     ctx.scale(camera.scale, camera.scale);
     ctx.translate(-camera.x, -camera.y);
-    
+
     // Rendu des murs "fantômes" par-dessus le fog (pour la lisibilité)
     ctx.globalAlpha = 0.4;
     renderTilemap(level, 'murs');
