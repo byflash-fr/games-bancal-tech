@@ -1,4 +1,7 @@
-const socket = io();
+const socket = io({
+    transports: ['websocket'],
+    upgrade: false
+});
 
 const urlParams = new URLSearchParams(window.location.search);
 const code = urlParams.get('code');

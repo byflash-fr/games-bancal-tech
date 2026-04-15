@@ -10,7 +10,10 @@
 //    sortie.png   → sprite animé 9 frames (360×40)
 // ═══════════════════════════════════════════════════════════════════
 
-const socket = io();
+const socket = io({
+    transports: ['websocket'],
+    upgrade: false
+});
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;

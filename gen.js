@@ -16,6 +16,7 @@ function largeurCalculée(taille) {
  * Vérifie si une case est "protégée" (ne doit pas devenir un mur de labyrinthe ou un piège)
  * Avec des couloirs de 3 de large, on vérifie un périmètre plus large.
  */
+const PROTECTED_IDS = new Set([2, 3, 4, 8]);
 function estCaseProtegee(matrice, x, y) {
     const ID_SOL = 1;
 
@@ -30,7 +31,7 @@ function estCaseProtegee(matrice, x, y) {
             if (ny >= 0 && ny < matrice.length && nx >= 0 && nx < matrice[0].length) {
                 let idVoisin = matrice[ny][nx];
                 // On protège un large espace autour de : Porte(2), Départ(3), Sortie(4), Plaque(8)
-                if ([2, 3, 4, 8].includes(idVoisin)) {
+                if (PROTECTED_IDS.has(idVoisin)) {
                     return true;
                 }
             }

@@ -34,7 +34,12 @@ function getLocalIP() {
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+    cors: { origin: "*" },
+    pingTimeout: 60000,    // Attendre jusqu'à 60 secondes sans réponse avant de déconnecter
+    pingInterval: 25000,   // Envoyer un ping toutes les 25 secondes
+    transports: ['websocket', 'polling'] // Autoriser le websocket pur d'entrée
+});
 
 const PORT = process.env.PORT || 3000;
 const LOCAL_IP = getLocalIP();
@@ -315,7 +320,17 @@ setInterval(() => {
             }
         }
         
-        io.to(code).emit('stateUpdate', gameState);
+        // Optimisation : On ne renvoie pas toute la map/géométrie à chaque tick de 20ms
+        const reducedState = {
+            ...gameState,
+            level: {
+                ...gameState.level,
+                geometrie: undefined, // Déjà envoyé au début du jeu
+                walls: undefined     // Très lourd et statique
+            }
+        };
+        
+        io.to(code).emit('stateUpdate', reducedState);
     }
 }, TICK_RATE);
 

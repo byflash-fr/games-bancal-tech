@@ -16,6 +16,7 @@ function largeurCalculée(taille) {
     return Math.floor(taille * 1.5);
 }
 
+const PROTECTED_IDS = new Set([2, 3, 4, 8]);
 function estCaseProtegee(matrice, x, y) {
     const ID_SOL = 1;
     const ID_MUR_EXTERIEUR = 6;
@@ -33,7 +34,7 @@ function estCaseProtegee(matrice, x, y) {
         if (ny >= 0 && ny < matrice.length && nx >= 0 && nx < matrice[0].length) {
             let idVoisin = matrice[ny][nx];
             // Protection si voisin est Porte, Départ, Plaque ou Sortie
-            if (idVoisin !== ID_SOL && idVoisin !== ID_MUR_EXTERIEUR && idVoisin !== 7 && idVoisin !== 5) {
+            if (PROTECTED_IDS.has(idVoisin)) {
                 return true;
             }
         }
@@ -294,15 +295,33 @@ function generateLevel(playerCount) {
     return level;
 }
 
-function checkWallCollision(p, walls, doors) {
+function checkWallCollision(p, level) {
     const pr = PLAYER_R;
-    for (let w of walls) {
-        const nearX = Math.max(w.x, Math.min(p.x, w.x + w.w));
-        const nearY = Math.max(w.y, Math.min(p.y, w.y + w.h));
-        const dx = p.x - nearX, dy = p.y - nearY;
-        if (dx * dx + dy * dy <= pr * pr) return true;
+    const matrice = level.geometrie;
+    if (!matrice) return false;
+
+    // Rayon de détection (un peu plus large pour éviter les glitches)
+    const margin = pr - 2;
+    
+    // Bounds in grid coordinates
+    const minC = Math.floor((p.x - margin) / TILE);
+    const maxC = Math.floor((p.x + margin) / TILE);
+    const minR = Math.floor((p.y - margin) / TILE);
+    const maxR = Math.floor((p.y + margin) / TILE);
+
+    for (let r = minR; r <= maxR; r++) {
+        for (let c = minC; c <= maxC; c++) {
+            if (r < 0 || r >= matrice.length || c < 0 || c >= matrice[0].length) {
+                return true; // Bordures
+            }
+            if (matrice[r][c] === 6) { // ID_MUR
+                return true;
+            }
+        }
     }
-    for (let d of doors) {
+
+    // Portes (toujours par liste car elles sont peu nombreuses et leur état 'open' change)
+    for (let d of level.doors) {
         if (d.open) continue;
         const nearX = Math.max(d.x, Math.min(p.x, d.x + d.w));
         const nearY = Math.max(d.y, Math.min(p.y, d.y + d.h));
@@ -319,11 +338,11 @@ function applyPhysics(player, level) {
     let newX = player.x + player.vx * SPEED;
     const oldX = player.x;
     player.x = newX;
-    if (checkWallCollision(player, level.walls, level.doors)) player.x = oldX;
+    if (checkWallCollision(player, level)) player.x = oldX;
     let newY = player.y + player.vy * SPEED;
     const oldY = player.y;
     player.y = newY;
-    if (checkWallCollision(player, level.walls, level.doors)) player.y = oldY;
+    if (checkWallCollision(player, level)) player.y = oldY;
 }
 
 function updateTriggers(players, level) {
