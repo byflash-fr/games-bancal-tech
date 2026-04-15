@@ -108,17 +108,21 @@ function drawSprite(anim, cx, cy, size) {
     return true;
 }
 
-// ── Tilemap – lecture directe de level.geometrie ─────────────────────
-// Plus de buildMatrix intermédiaire : on lit la grille brute à chaque frame.
-let tileAppearance = null;  // bitmask précalculé à chaque nouveau niveau
+// ── Tilemap – Off-screen Canvas (OPTIMISATION) ────────────────────────
+// La tilemap statique (sol + murs) est pré-rendue UNE SEULE FOIS,
+// puis réutilisée à chaque frame via ctx.drawImage() pour économiser du CPU.
+let tileAppearance = null;  // bitmask précalculé
 let lastGeometrie = null;   // référence pour détecter un changement de niveau
 
+// Canvas hors-écran partagé pour la tilemap statique
+let offscreenSol = null;
+let offscreenMurs = null;
+let offscreenGeometrie = null; // référence de la géométrie associée au cache
+
 // Précalcule le bitmask autotile de chaque MUR dans la géométrie.
-// Les bords hors-grille comptent comme des murs (comportement original).
 function computeAutotile(matrice) {
     const rows = matrice.length;
     const cols = matrice[0].length;
-    // isWall : hors-grille = mur, dans la grille = ID 6
     const isWall = (r, c) => {
         if (r < 0 || r >= rows || c < 0 || c >= cols) return true;
         return matrice[r][c] === T.MUR;
@@ -127,80 +131,130 @@ function computeAutotile(matrice) {
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
             if (matrice[r][c] !== T.MUR) continue;
-            // Bitmask 4 voisins : Haut=1, Gauche=2, Droite=4, Bas=8
             let bitmask = 0;
-            if (isWall(r - 1, c)) bitmask += 1; // Haut
-            if (isWall(r, c - 1)) bitmask += 2; // Gauche
-            if (isWall(r, c + 1)) bitmask += 4; // Droite
-            if (isWall(r + 1, c)) bitmask += 8; // Bas
+            if (isWall(r - 1, c)) bitmask += 1;
+            if (isWall(r, c - 1)) bitmask += 2;
+            if (isWall(r, c + 1)) bitmask += 4;
+            if (isWall(r + 1, c)) bitmask += 8;
             tileAppearance[r][c] = bitmask;
         }
     }
 }
 
-// ── Rendu de la tilemap ───────────────────────────────────────────────
-function renderTilemap(level, layerType) {
-    const matrice = level.geometrie;
-    if (!matrice) return;
-
-    // Recalcule le bitmask si la géométrie a changé (nouveau niveau)
-    if (matrice !== lastGeometrie) {
-        computeAutotile(matrice);
-        lastGeometrie = matrice;
-        cachedSegments = null; // invalide le cache fog
-    }
-
+// Dessine une couche (sol ou murs) sur un canvas cible donné (offscreen ou ctx principal).
+// targetCtx : le contexte de destination
+function _drawTilemapLayer(targetCtx, matrice, layerType, imgFeuille, feuilleOk) {
     const rows = matrice.length;
     const cols = matrice[0].length;
-
-    // Ensemble des cases occupées par des portes fermées
-    const doorSet = new Set();
-    for (const d of level.doors) {
-        if (!d.open) {
-            const c0 = Math.floor(d.x / TILE), r0 = Math.floor(d.y / TILE);
-            const c1 = Math.ceil((d.x + d.w) / TILE), r1 = Math.ceil((d.y + d.h) / TILE);
-            for (let r = r0; r < r1; r++) for (let c = c0; c < c1; c++) doorSet.add(`${r},${c}`);
-        }
-    }
-
-    const imgFeuille = RES['feuille'];
-    const feuilleOk = imgFeuille.complete && imgFeuille.naturalWidth > 0;
-
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
             const px = c * TILE, py = r * TILE;
             const id = matrice[r][c];
-            const isDoor = doorSet.has(`${r},${c}`);
-
             if (layerType === 'sol') {
-                if (id === T.HERBE || id === T.SPAWN) {
-                    // Sol standard (première case de feuille.png)
+                // Toutes les cases non-mur ont du sol en dessous
+                if (id !== T.MUR) {
                     if (feuilleOk) {
-                        ctx.drawImage(imgFeuille, 0, 0, TILE, TILE, px, py, TILE, TILE);
+                        targetCtx.drawImage(imgFeuille, 0, 0, TILE, TILE, px, py, TILE, TILE);
                     } else {
-                        ctx.fillStyle = '#0a0a0a';
-                        ctx.fillRect(px, py, TILE, TILE);
-                    }
-                } else if (id !== T.MUR && !isDoor) {
-                    // Autres IDs au sol (porte ouverte, piège, pièce, sortie...) → fond sol standard
-                    if (feuilleOk) {
-                        ctx.drawImage(imgFeuille, 0, 0, TILE, TILE, px, py, TILE, TILE);
-                    } else {
-                        ctx.fillStyle = '#0a0a0a';
-                        ctx.fillRect(px, py, TILE, TILE);
+                        targetCtx.fillStyle = '#0a0a0a';
+                        targetCtx.fillRect(px, py, TILE, TILE);
                     }
                 }
-            }
-            else if (layerType === 'murs') {
-                if (id === T.MUR || isDoor) {
-                    // Mur autotile depuis feuille.png (ligne 3, y = 2*TILE pour les murs dorés)
-                    const bitmask = isDoor ? 0 : (tileAppearance[r][c] || 0);
+            } else if (layerType === 'murs') {
+                if (id === T.MUR) {
+                    const bitmask = tileAppearance[r][c] || 0;
                     const srcX = bitmask * TILE;
                     const srcY = 2 * TILE;
                     if (feuilleOk) {
-                        ctx.drawImage(imgFeuille, srcX, srcY, TILE, TILE, px, py, TILE, TILE);
+                        targetCtx.drawImage(imgFeuille, srcX, srcY, TILE, TILE, px, py, TILE, TILE);
                     } else {
-                        ctx.fillStyle = isDoor ? '#7f3030' : '#2a2a3a';
+                        targetCtx.fillStyle = '#2a2a3a';
+                        targetCtx.fillRect(px, py, TILE, TILE);
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Construit (ou reconstruit) les canvas hors-écran pour la tilemap statique.
+// Appelé une seule fois par niveau. Les portes (dynamiques) sont NON incluses ici.
+function buildOffscreenTilemap(level) {
+    const matrice = level.geometrie;
+    if (!matrice) return;
+    const rows = matrice.length;
+    const cols = matrice[0].length;
+    const W = cols * TILE, H = rows * TILE;
+
+    const imgFeuille = RES['feuille'];
+    const feuilleOk = imgFeuille.complete && imgFeuille.naturalWidth > 0;
+
+    // Canvas sol
+    offscreenSol = document.createElement('canvas');
+    offscreenSol.width = W; offscreenSol.height = H;
+    const solCtx = offscreenSol.getContext('2d');
+    solCtx.imageSmoothingEnabled = false;
+    _drawTilemapLayer(solCtx, matrice, 'sol', imgFeuille, feuilleOk);
+
+    // Canvas murs
+    offscreenMurs = document.createElement('canvas');
+    offscreenMurs.width = W; offscreenMurs.height = H;
+    const mursCtx = offscreenMurs.getContext('2d');
+    mursCtx.imageSmoothingEnabled = false;
+    _drawTilemapLayer(mursCtx, matrice, 'murs', imgFeuille, feuilleOk);
+
+    offscreenGeometrie = matrice;
+    console.log('[Perf] Off-screen tilemap built:', W, 'x', H);
+}
+
+// ── Rendu de la tilemap ───────────────────────────────────────────────
+// OPTIMISÉ : dessine uniquement le cache hors-écran si disponible.
+// Les portes (dynamiques) sont dessinées séparément par-dessus.
+function renderTilemap(level, layerType) {
+    const matrice = level.geometrie;
+    if (!matrice) return;
+
+    // Recalcule autotile + cache si le niveau a changé
+    if (matrice !== lastGeometrie) {
+        computeAutotile(matrice);
+        lastGeometrie = matrice;
+        cachedSegments = null; // invalide le cache fog
+        offscreenGeometrie = null; // force la reconstruction du cache tilemap
+    }
+
+    // Reconstruction du cache si nécessaire (ex: images pas encore chargées)
+    if (offscreenGeometrie !== matrice) {
+        const imgFeuille = RES['feuille'];
+        if (imgFeuille.complete && imgFeuille.naturalWidth > 0) {
+            buildOffscreenTilemap(level);
+        }
+    }
+
+    // Dessin depuis le cache off-screen (très rapide : 1 seul drawImage)
+    if (layerType === 'sol' && offscreenSol) {
+        ctx.drawImage(offscreenSol, 0, 0);
+    } else if (layerType === 'murs' && offscreenMurs) {
+        ctx.drawImage(offscreenMurs, 0, 0);
+        // Superpose les portes fermées (dynamiques) par-dessus
+        _drawDoorOverMurs(level);
+    }
+}
+
+// Dessine les portes fermées par-dessus la couche de murs (portes = dynamiques).
+function _drawDoorOverMurs(level) {
+    const imgFeuille = RES['feuille'];
+    const feuilleOk = imgFeuille.complete && imgFeuille.naturalWidth > 0;
+    for (const d of level.doors) {
+        if (!d.open) {
+            const c0 = Math.floor(d.x / TILE), r0 = Math.floor(d.y / TILE);
+            const c1 = Math.ceil((d.x + d.w) / TILE), r1 = Math.ceil((d.y + d.h) / TILE);
+            for (let r = r0; r < r1; r++) {
+                for (let c = c0; c < c1; c++) {
+                    const px = c * TILE, py = r * TILE;
+                    if (feuilleOk) {
+                        ctx.drawImage(imgFeuille, 0, 2 * TILE, TILE, TILE, px, py, TILE, TILE);
+                    } else {
+                        ctx.fillStyle = '#7f3030';
                         ctx.fillRect(px, py, TILE, TILE);
                     }
                 }
@@ -619,23 +673,91 @@ document.addEventListener('keydown', unlockAudio);
 let gameState = { players: {}, level: null, status: 'lobby' };
 let lastLevelId = null;
 
+// ── Interpolation client (OPTIMISATION) ───────────────────────────────
+// targetPlayers contient les positions REÇUES du serveur (snapshots réseau).
+// gameState.players contient les positions INTERPOLÉES affichées à l'écran.
+// La valeur 0.18 = vitesse de lissage. Augmenter pour plus de réactivité,
+// diminuer pour plus de fluidité (au prix d'un léger retard visuel).
+const LERP_FACTOR = 0.18;
+let targetPlayers = {}; // Dernières positions connues (serveur)
+
+// ── Décompression du payload compact (OPTIMISATION) ──────────────────
+// Le serveur envoie les joueurs sous forme de tableaux compacts.
+// Format : [x, y, vx, vy, hp, isDead, invuln, actionBlink, color, pseudo]
+// Cette fonction recrée un objet player lisible pour le reste du client.
+function decompressPlayers(rawPlayers) {
+    const result = {};
+    for (const id in rawPlayers) {
+        const d = rawPlayers[id];
+        // Si c'est déjà un objet (update complet), on le prend tel quel
+        if (!Array.isArray(d)) { result[id] = d; continue; }
+        result[id] = {
+            id,
+            x:           d[0],
+            y:           d[1],
+            vx:          d[2],
+            vy:          d[3],
+            hp:          d[4],
+            isDead:      d[5] === 1,
+            invuln:      d[6],
+            actionBlink: d[7],
+            color:       d[8],
+            pseudo:      d[9]
+        };
+    }
+    return result;
+}
+
 socket.emit('createGame', { pseudo: new URLSearchParams(window.location.search).get('pseudo') || 'Host' }, (r) => {
     if (r.success) console.log('Game created:', r.code);
 });
 
 socket.on('stateUpdate', (newState) => {
-    // Si le nouveau state a la géométrie, c'est un update complet (début de partie / join)
+    // ── Décompression du payload compact ─────────────────────────────
+    // Le serveur envoie les joueurs compressés en tableaux (_compressed flag).
+    // On les convertit en objets avant tout traitement.
+    if (newState._compressed && newState.players) {
+        newState.players = decompressPlayers(newState.players);
+    }
+
+    // Update complet (nouveau niveau, géométrie incluse)
     if (newState.level && newState.level.geometrie) {
         gameState = newState;
+        // Synchronise les cibles et positions immédiatement (pas d'interpolation au départ)
+        targetPlayers = {};
+        for (const id in newState.players) {
+            targetPlayers[id] = { ...newState.players[id] };
+            gameState.players[id] = { ...newState.players[id] }; // position identique
+        }
+        // Invalide le cache tilemap car la géométrie a changé
+        offscreenGeometrie = null;
     } else {
-        // Sinon c'est un tick dynamique (20ms), on fusionne les données changeantes
+        // Tick dynamique : on ne téléporte PAS les joueurs, on met à jour les CIBLES
         gameState.status = newState.status;
         gameState.timeLeft = newState.timeLeft;
         gameState.countdown = newState.countdown;
-        gameState.players = newState.players;
+
+        // Met à jour les cibles réseau pour l'interpolation
+        // (les positions visuelles sont lissées dans la boucle draw())
+        for (const id in newState.players) {
+            if (!targetPlayers[id]) {
+                // Nouveau joueur : initialise directement sans interpolation
+                targetPlayers[id] = { ...newState.players[id] };
+                if (!gameState.players[id]) gameState.players[id] = { ...newState.players[id] };
+            } else {
+                // Mise à jour des données cibles (position + état)
+                Object.assign(targetPlayers[id], newState.players[id]);
+            }
+        }
+        // Supprime les joueurs partis
+        for (const id in targetPlayers) {
+            if (!newState.players[id]) {
+                delete targetPlayers[id];
+                delete gameState.players[id];
+            }
+        }
 
         if (newState.level && gameState.level) {
-            // On met à jour uniquement les propriétés dynamiques du niveau
             Object.assign(gameState.level, newState.level);
         }
     }
@@ -737,7 +859,30 @@ function draw() {
         stopWalk(); requestAnimationFrame(draw); return;
     }
 
-    // (Plus besoin de buildMatrix – renderTilemap lit level.geometrie directement)
+    // ── INTERPOLATION DES JOUEURS (OPTIMISATION) ──────────────────────
+    // À chaque frame, on déplace les positions visuelles vers les cibles
+    // réseau par un facteur LERP. Résultat : mouvement fluide à 60 FPS
+    // même si le serveur n'envoie des positions que 20 fois par seconde.
+    for (const id in targetPlayers) {
+        const target = targetPlayers[id];
+        const current = players[id];
+        if (!current) {
+            players[id] = { ...target };
+            continue;
+        }
+        // Lerp sur la position uniquement (les autres champs sont copiés directs)
+        current.x += (target.x - current.x) * LERP_FACTOR;
+        current.y += (target.y - current.y) * LERP_FACTOR;
+        // Copie instantanée des données d'état (HP, invuln, etc.)
+        current.vx = target.vx;
+        current.vy = target.vy;
+        current.hp = target.hp;
+        current.isDead = target.isDead;
+        current.invuln = target.invuln;
+        current.actionBlink = target.actionBlink;
+        current.color = target.color;
+        current.pseudo = target.pseudo;
+    }
 
     updateCamera(level, players);
 

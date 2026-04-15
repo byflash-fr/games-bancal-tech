@@ -88,17 +88,38 @@ function buildDynamicState(gameState) {
         hearts: gameState.level.hearts,
         traps: gameState.level.traps,
         exit: gameState.level.exit,
-        quests: gameState.level.quests,
-        sequenceIndex: gameState.level.sequenceIndex,
-        sequenceButtons: gameState.level.sequenceButtons
+        quests: gameState.level.quests
+        // sequenceIndex / sequenceButtons supprimés (feature retirée)
     } : null;
+
+    // ── COMPRESSION DU PAYLOAD (OPTIMISATION) ──────────────────────
+    // On évite les objets JSON lourds : chaque joueur est compressé
+    // en un tableau compact [x, y, vx, vy, hp, isDead, invuln, actionBlink, color, pseudo].
+    // La décompression se fait côté client dans stateUpdate.
+    const compressedPlayers = {};
+    for (const id in gameState.players) {
+        const p = gameState.players[id];
+        compressedPlayers[id] = [
+            Math.round(p.x * 10) / 10,  // [0] x (1 décimale suffira)
+            Math.round(p.y * 10) / 10,  // [1] y
+            p.vx,                        // [2] vx
+            p.vy,                        // [3] vy
+            p.hp,                        // [4] hp
+            p.isDead ? 1 : 0,            // [5] isDead (booléen → 0/1)
+            p.invuln,                    // [6] invuln (ticks restants)
+            p.actionBlink,               // [7] actionBlink
+            p.color,                     // [8] color (hex string, changé rarement)
+            p.pseudo                     // [9] pseudo
+        ];
+    }
 
     return {
         status: gameState.status,
         timeLeft: gameState.timeLeft,
         countdown: gameState.countdown,
-        players: gameState.players,
-        level: dynamicLevel
+        players: compressedPlayers, // tableau compact au lieu d'objet
+        level: dynamicLevel,
+        _compressed: true  // marqueur pour que le client sache décompresser
     };
 }
 
