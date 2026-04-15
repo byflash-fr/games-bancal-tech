@@ -5,12 +5,16 @@ const BASE_HP = 2;
 const MAX_HP = 4;
 
 /**
- * Spatial Hash Grid for O(1) Lookups.
+ * Spatial Hash Grid – O(1) insert/remove/lookup.
+ * Utilise Map<string, Set> : les Set garantissent l'unicité et la
+ * suppression en O(1) (contrairement aux Array classiques).
+ * Chaque entité conserve sa clé courante dans `entity._gridKey`
+ * pour éviter toute recherche lors de remove/update.
  */
 class SpatialHashGrid {
     constructor(width, height, cellSize) {
         this.cellSize = cellSize;
-        this.grid = new Map();
+        this.grid = new Map(); // Map<"cx,cy", Set<entity>>
     }
 
     _key(x, y) {
@@ -19,8 +23,30 @@ class SpatialHashGrid {
 
     insert(entity) {
         const key = this._key(entity.x, entity.y);
-        if (!this.grid.has(key)) this.grid.set(key, []);
-        this.grid.get(key).push(entity);
+        if (!this.grid.has(key)) this.grid.set(key, new Set());
+        this.grid.get(key).add(entity);
+        entity._gridKey = key; // cache pour remove O(1)
+    }
+
+    /** Déplace l'entité dans la grille si elle a changé de cellule. */
+    update(entity) {
+        const newKey = this._key(entity.x, entity.y);
+        if (entity._gridKey !== newKey) {
+            this.remove(entity);
+            this.insert(entity);
+        }
+    }
+
+    /** Suppression en O(1) grâce au cache de clé. */
+    remove(entity) {
+        if (entity._gridKey && this.grid.has(entity._gridKey)) {
+            this.grid.get(entity._gridKey).delete(entity);
+            // Libère la RAM si la cellule est vide
+            if (this.grid.get(entity._gridKey).size === 0) {
+                this.grid.delete(entity._gridKey);
+            }
+        }
+        entity._gridKey = null;
     }
 
     clear() {
@@ -36,8 +62,8 @@ class SpatialHashGrid {
 
         for (let ix = startX; ix <= endX; ix++) {
             for (let iy = startY; iy <= endY; iy++) {
-                const list = this.grid.get(`${ix},${iy}`);
-                if (list) results.push(...list);
+                const cell = this.grid.get(`${ix},${iy}`);
+                if (cell) for (const e of cell) results.push(e);
             }
         }
         return results;
