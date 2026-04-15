@@ -30,57 +30,49 @@ const playersList = document.getElementById('players-list');
 const victoryUI = document.getElementById('victory-ui');
 
 
-const backgroundMusic = new Audio('/assets/music.mp3');
+const backgroundMusic = new Audio('/assets/son/music.mp3');
 backgroundMusic.loop = true;
 backgroundMusic.preload = 'auto';
 backgroundMusic.volume = 0.35;
-const walkingSound = new Audio('/assets/marche.mp3');
+const walkingSound = new Audio('/assets/son/marche.mp3');
 walkingSound.loop = true;
 walkingSound.preload = 'auto';
 walkingSound.volume = 0.4;
 
+
+// --- Chargement des Textures ---
+const herbeImg = new Image();
+herbeImg.src = '/assets/images/herbe.png';
+let herbePattern = null;
+herbeImg.onload = () => { herbePattern = ctx.createPattern(herbeImg, 'repeat'); };
+
+const murImg = new Image();
+murImg.src = '/assets/images/feuille.png';
+let murPattern = null;
+murImg.onload = () => { murPattern = ctx.createPattern(murImg, 'repeat'); };
+
 const coinImg = new Image();
 coinImg.src = '/assets/images/piece.png';
-const COIN_FALLBACK_FRAMES = 10;
-const COIN_FRAME_DURATION = 90;
-const COIN_BASE_SIZE = 34;
-const coinSprite = {
-    ready: false,
-    frameCount: COIN_FALLBACK_FRAMES,
-    frameWidth: 0,
-    frameHeight: 0
-};
 
-coinImg.onload = () => {
-    const spriteHeight = coinImg.height;
-    const guessedFrameCount = Math.round(coinImg.width / spriteHeight);
-    const hasSquareFrames = guessedFrameCount > 0 && Math.abs((coinImg.width / guessedFrameCount) - spriteHeight) < 1;
+const sortieImg = new Image();
+sortieImg.src = '/assets/images/sortie.png';
 
-    coinSprite.frameCount = hasSquareFrames ? guessedFrameCount : COIN_FALLBACK_FRAMES;
-    coinSprite.frameWidth = coinImg.width / coinSprite.frameCount;
-    coinSprite.frameHeight = coinImg.height;
-    coinSprite.ready = true;
-};
+const pikkuxImg = new Image();
+pikkuxImg.src = '/assets/images/pikkux.png';
 
-const feuilleImg = new Image();
-feuilleImg.src = '/assets/image/feuille.png';
-let feuillePattern = null;
-feuilleImg.onload = () => {
-    feuillePattern = ctx.createPattern(feuilleImg, 'repeat');
-};
+const pikkuyImg = new Image();
+pikkuyImg.src = '/assets/images/pikkuy.png';
+// --------------------------------
+
 
 function tryPlayBackgroundMusic() {
     if (!backgroundMusic.paused) return;
-    backgroundMusic.play().catch(() => {
-        // Autoplay can be blocked until first user interaction.
-    });
+    backgroundMusic.play().catch(() => {});
 }
 
 function tryPlayWalkingSound() {
     if (!walkingSound.paused) return;
-    walkingSound.play().catch(() => {
-        // Autoplay can be blocked until first user interaction.
-    });
+    walkingSound.play().catch(() => {});
 }
 
 function stopWalkingSound() {
@@ -206,8 +198,6 @@ function calculateVisibilityPolygon(origin, segments) {
     return intersects;
 }
 
-
-
 let camera = { x: 0, y: 0, scale: 1 };
 const fogCanvas = document.createElement('canvas');
 const fogCtx = fogCanvas.getContext('2d', { willReadFrequently: true });
@@ -265,7 +255,7 @@ function draw() {
         targetX = (minX + maxX) / 2;
         targetY = (minY + maxY) / 2;
         
-        let bw = (maxX - minX) + 600; // padding around players
+        let bw = (maxX - minX) + 600;
         let bh = (maxY - minY) + 600; 
         
         targetScale = Math.min(canvas.width / bw, canvas.height / bh);
@@ -282,13 +272,13 @@ function draw() {
     ctx.scale(camera.scale, camera.scale);
     ctx.translate(-camera.x, -camera.y);
 
-    // ── Fonds des salles colorées ────────────────────────────────
+    // ── Fonds des salles (Sol) ────────────────────────────────
     if (gameState.level.rooms) {
         const roomColors = {
-            A: 'rgba(46, 204, 113, 0.07)',  // Spawn – vert
-            B: 'rgba(52, 152, 219, 0.07)',  // Tampon – bleu
-            C: 'rgba(230, 126, 34, 0.07)',  // Fermée – orange
-            D: 'rgba(231, 76, 60, 0.07)'    // Sortie – rouge
+            A: 'rgba(46, 204, 113, 0.07)',  
+            B: 'rgba(52, 152, 219, 0.07)',  
+            C: 'rgba(230, 126, 34, 0.07)',  
+            D: 'rgba(231, 76, 60, 0.07)'    
         };
         const roomLabels = {
             A: '🏠 SPAWN',
@@ -297,8 +287,8 @@ function draw() {
             D: '🚪 SORTIE'
         };
         for (const [key, room] of Object.entries(gameState.level.rooms)) {
-            if (feuillePattern) {
-                ctx.fillStyle = feuillePattern;
+            if (herbePattern) {
+                ctx.fillStyle = herbePattern;
                 ctx.fillRect(room.x, room.y, room.w, room.h);
             }
             ctx.fillStyle = roomColors[key];
@@ -322,21 +312,48 @@ function draw() {
     }
 
     // ── Sortie ──────────────────────────────────────────────────
-    const exitGlow = gameState.level.exit.active ? '#2ecc71' : '#7f8c8d';
-    if (gameState.level.exit.active) {
-        ctx.shadowColor = '#2ecc71';
-        ctx.shadowBlur  = 30;
+    if (sortieImg.complete && sortieImg.width > 0) {
+        let frames = Math.max(1, Math.floor(sortieImg.width / sortieImg.height));
+        let fIndex = Math.floor(Date.now() / 150) % frames; 
+        let frameW = sortieImg.width / frames;
+        let frameH = sortieImg.height;
+        
+        let r = gameState.level.exit.r || 30;
+        let drawSize = r * 2.5; 
+        
+        ctx.save();
+        if (gameState.level.exit.active) {
+            ctx.shadowColor = '#2ecc71';
+            ctx.shadowBlur  = 30;
+        } else {
+            ctx.globalAlpha = 0.5; 
+        }
+        ctx.drawImage(sortieImg, fIndex * frameW, 0, frameW, frameH, gameState.level.exit.x - drawSize/2, gameState.level.exit.y - drawSize/2, drawSize, drawSize);
+        ctx.restore();
+        
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 22px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('SORTIE', gameState.level.exit.x, gameState.level.exit.y + 8);
+    } else {
+        const exitGlow = gameState.level.exit.active ? '#2ecc71' : '#7f8c8d';
+        if (gameState.level.exit.active) {
+            ctx.shadowColor = '#2ecc71';
+            ctx.shadowBlur  = 30;
+        }
+        ctx.fillStyle = exitGlow;
+        ctx.beginPath();
+        ctx.arc(gameState.level.exit.x, gameState.level.exit.y, gameState.level.exit.r, 0, Math.PI*2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 22px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('SORTIE', gameState.level.exit.x, gameState.level.exit.y + 8);
     }
-    ctx.fillStyle = exitGlow;
-    ctx.beginPath();
-    ctx.arc(gameState.level.exit.x, gameState.level.exit.y, gameState.level.exit.r, 0, Math.PI*2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 22px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('SORTIE', gameState.level.exit.x, gameState.level.exit.y + 8);
 
+
+    // ── Boutons ──────────────────────────────────────────────────
     for(let b of gameState.level.buttons) {
         ctx.fillStyle = b.pressed ? '#2ecc71' : b.color;
         ctx.beginPath();
@@ -355,41 +372,18 @@ function draw() {
         }
     }
 
-    const now = Date.now();
+    // ── Pièces (Coins) ──────────────────────────────────────────────────
     for(let c of gameState.level.coins) {
         if(!c.collected) {
-            if (coinSprite.ready && coinImg.complete && coinImg.width > 0) {
-                // Desynchronise chaque pièce pour éviter un rendu "robotique"
-                const phase = (c.x * 0.013) + (c.y * 0.017);
-                const frameIndex = Math.floor((now + phase * 150) / COIN_FRAME_DURATION) % coinSprite.frameCount;
-                const bobOffset = Math.sin(now * 0.006 + phase) * 3;
-                const pulseScale = 1 + Math.sin(now * 0.01 + phase) * 0.08;
-                const drawW = COIN_BASE_SIZE * pulseScale;
-                const drawH = COIN_BASE_SIZE * pulseScale;
-                const drawX = c.x - drawW / 2;
-                const drawY = c.y - drawH / 2 + bobOffset;
-
-                ctx.save();
-                ctx.globalAlpha = 0.35 + Math.sin(now * 0.008 + phase) * 0.1;
-                ctx.fillStyle = '#f1c40f';
-                ctx.beginPath();
-                ctx.arc(c.x, c.y + bobOffset, 20 * pulseScale, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.restore();
-
-                ctx.drawImage(
-                    coinImg,
-                    frameIndex * coinSprite.frameWidth,
-                    0,
-                    coinSprite.frameWidth,
-                    coinSprite.frameHeight,
-                    drawX,
-                    drawY,
-                    drawW,
-                    drawH
-                );
+            if (coinImg.complete && coinImg.width > 0) {
+                let frames = Math.max(1, Math.floor(coinImg.width / coinImg.height)); 
+                let fIndex = Math.floor(Date.now() / 100) % frames;
+                let frameW = coinImg.width / frames; 
+                let frameH = coinImg.height;
+                let drawW = 32; 
+                let drawH = 32;
+                ctx.drawImage(coinImg, fIndex * frameW, 0, frameW, frameH, c.x - drawW/2, c.y - drawH/2, drawW, drawH);
             } else {
-                // Fallback de sécurité si l'image n'est pas encore chargée
                 ctx.fillStyle = '#f1c40f';
                 ctx.beginPath();
                 ctx.arc(c.x, c.y, 15, 0, Math.PI*2);
@@ -401,6 +395,7 @@ function draw() {
         }
     }
 
+    // ── Joueurs ──────────────────────────────────────────────────
     for (const id in gameState.players) {
         const player = gameState.players[id];
         ctx.save();
@@ -457,6 +452,7 @@ function draw() {
         fogCanvas.height = canvas.height;
     }
     
+    // ── Brouillard ──────────────────────────────────────────────────
     fogCtx.globalCompositeOperation = 'source-over';
     fogCtx.clearRect(0,0, fogCanvas.width, fogCanvas.height);
     fogCtx.fillStyle = '#050510'; 
@@ -520,37 +516,29 @@ function draw() {
     ctx.scale(camera.scale, camera.scale);
     ctx.translate(-camera.x, -camera.y);
     
-    // Murs
-    const WALL_T_THICK = 40; // les murs séparateurs / bordures sont épais (>=40)
+    // ── Murs ──────────────────────────────────────────────────
     for(let w of gameState.level.walls) {
-        const isThick = (w.w >= WALL_T_THICK || w.h >= WALL_T_THICK) &&
-                        (Math.max(w.w, w.h) / Math.min(w.w, w.h) >= 3);
-        const isMaze = Math.min(w.w, w.h) <= 22; // mur de labyrinthe fin
+        const isMaze = Math.min(w.w, w.h) <= 22;
         
-        if (feuillePattern) {
-            ctx.fillStyle = feuillePattern;
+        if (murPattern) {
+            ctx.fillStyle = murPattern;
             ctx.fillRect(w.x, w.y, w.w, w.h);
-        }
-
-        if (isMaze) {
-            ctx.fillStyle = feuillePattern ? 'rgba(42, 42, 58, 0.8)' : '#2a2a3a';
+            // Ajoute un léger voile pour différencier les murs fins des bordures
+            ctx.fillStyle = isMaze ? 'rgba(42, 42, 58, 0.4)' : 'rgba(13, 13, 20, 0.4)';
             ctx.fillRect(w.x, w.y, w.w, w.h);
-            ctx.strokeStyle = '#3a3a55';
-            ctx.lineWidth = 0.5;
-            ctx.strokeRect(w.x, w.y, w.w, w.h);
         } else {
-            ctx.fillStyle = feuillePattern ? 'rgba(13, 13, 20, 0.8)' : '#0d0d14';
+            ctx.fillStyle = isMaze ? '#2a2a3a' : '#0d0d14';
             ctx.fillRect(w.x, w.y, w.w, w.h);
-            ctx.strokeStyle = '#00ffcc';
-            ctx.lineWidth = 1.5;
-            ctx.strokeRect(w.x, w.y, w.w, w.h);
         }
+        
+        ctx.strokeStyle = isMaze ? '#3a3a55' : '#00ffcc';
+        ctx.lineWidth = isMaze ? 0.5 : 1.5;
+        ctx.strokeRect(w.x, w.y, w.w, w.h);
     }
 
-    // Portes
+    // ── Portes ──────────────────────────────────────────────────
     for(let d of gameState.level.doors) {
         if(!d.open) {
-            // Couleur basée sur le bouton lié
             const btn = gameState.level.buttons ? gameState.level.buttons.find(b => b.id === d.linkedButton) : null;
             const dCol = btn ? btn.color : '#e74c3c';
             ctx.fillStyle = dCol + 'cc';
@@ -558,13 +546,11 @@ function draw() {
             ctx.strokeStyle = dCol;
             ctx.lineWidth = 2;
             ctx.strokeRect(d.x, d.y, d.w, d.h);
-            // Icône cadenas
             ctx.fillStyle = '#fff';
             ctx.font = 'bold 20px Arial';
             ctx.textAlign = 'center';
             ctx.fillText('🔒', d.x + d.w / 2, d.y + d.h / 2 + 7);
         } else {
-            // Porte ouverte : trait en pointillé
             ctx.strokeStyle = '#2ecc71';
             ctx.lineWidth = 2;
             ctx.setLineDash([8, 6]);
@@ -573,8 +559,49 @@ function draw() {
         }
     }
 
+    // ── Pièges ──────────────────────────────────────────────────
+    if (gameState.level.traps) {
+        for(let t of gameState.level.traps) {
+            let img = t.w > t.h ? pikkuxImg : pikkuyImg;
+            if (img.complete && img.width > 0) {
+                let frames = Math.max(1, Math.floor(img.width / img.height));
+                let fIndex = Math.floor(Date.now() / 100) % frames;
+                let frameW = img.width / frames;
+                let frameH = img.height;
+                
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(t.x, t.y, t.w, t.h);
+                ctx.clip(); // On empêche le dessin de déborder du rectangle du piège
+                
+                if (t.w > t.h) {
+                    // Piège horizontal (pikkux) : on le répète (tile) sur la largeur
+                    let ratio = t.h / frameH;
+                    let drawW = frameW * ratio;
+                    let drawH = t.h;
+                    for(let px = 0; px < t.w; px += drawW) {
+                        ctx.drawImage(img, fIndex * frameW, 0, frameW, frameH, t.x + px, t.y, drawW, drawH);
+                    }
+                } else {
+                    // Piège vertical (pikkuy) : on le répète (tile) sur la hauteur
+                    let ratio = t.w / frameW;
+                    let drawW = t.w;
+                    let drawH = frameH * ratio;
+                    for(let py = 0; py < t.h; py += drawH) {
+                        ctx.drawImage(img, fIndex * frameW, 0, frameW, frameH, t.x, t.y + py, drawW, drawH);
+                    }
+                }
+                ctx.restore();
+            } else {
+                ctx.fillStyle = '#e74c3c'; // Rouge par défaut
+                ctx.fillRect(t.x, t.y, t.w, t.h);
+            }
+        }
+    }
+
     ctx.restore();
     
+    // ── UI et HUD ──────────────────────────────────────────────────
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 24px Arial';
     ctx.textAlign = 'left';
@@ -648,10 +675,7 @@ function draw() {
         ctx.globalAlpha = 1.0; // reset
     }
     
-    if(gameState.status === 'victory') {
-        // Now handled by victoryUI overlay
-    } else if (gameState.status === 'defeat') {
-
+    if (gameState.status === 'defeat') {
         ctx.fillStyle = 'rgba(231, 76, 60, 0.8)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = '#fff';
