@@ -3,7 +3,7 @@
 //  Taille de tuile : 40px (même que le jeu source)
 //  Images :
 //    feuille.png  → tileset autotile (bitmask 4 voisins, 16 frames)
-//    herbe.png    → sol uni (1 frame)
+//    herbe.png    → particules (traînée derrière la bille)
 //    piece.png    → sprite animé 10 frames (400×40)
 //    pikkux.png   → sprite animé 4 frames (160×40) → piège horizontal
 //    pikkuy.png   → sprite animé 4 frames (160×40) → piège vertical
@@ -124,9 +124,7 @@ function renderTilemap(level) {
     }
 
     const imgFeuille = RES['feuille'];
-    const imgHerbe = RES['herbe'];
     const feuilleOk = imgFeuille.complete && imgFeuille.naturalWidth > 0;
-    const herbeOk = imgHerbe.complete && imgHerbe.naturalWidth > 0;
 
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
@@ -135,18 +133,18 @@ function renderTilemap(level) {
             const isDoor = doorSet.has(`${r},${c}`);
 
             if (id === T.HERBE || id === T.SPAWN) {
-                // Sol (herbe)
-                if (herbeOk) {
-                    ctx.drawImage(imgHerbe, 0, 0, imgHerbe.naturalWidth, imgHerbe.naturalHeight, px, py, TILE, TILE);
+                // Sol standard (première case de feuille.png)
+                if (feuilleOk) {
+                    ctx.drawImage(imgFeuille, 0, 0, TILE, TILE, px, py, TILE, TILE);
                 } else {
-                    ctx.fillStyle = '#1a2a1e';
+                    ctx.fillStyle = '#0a0a0a';
                     ctx.fillRect(px, py, TILE, TILE);
                 }
             } else if (id === T.MUR || isDoor) {
-                // Mur autotile depuis feuille.png (ligne 2, y = 1*TILE)
+                // Mur autotile depuis feuille.png (ligne 3, y = 2*TILE pour les murs dorés)
                 const bitmask = isDoor ? 0 : (tileAppearance[r][c] || 0);
                 const srcX = bitmask * TILE;
-                const srcY = 1 * TILE;
+                const srcY = 2 * TILE; 
                 if (feuilleOk) {
                     ctx.drawImage(imgFeuille, srcX, srcY, TILE, TILE, px, py, TILE, TILE);
                 } else {
@@ -154,11 +152,11 @@ function renderTilemap(level) {
                     ctx.fillRect(px, py, TILE, TILE);
                 }
             } else {
-                // Autres IDs (porte ouverte, piège, pièce, sortie...) → fond herbe
-                if (herbeOk) {
-                    ctx.drawImage(imgHerbe, 0, 0, imgHerbe.naturalWidth, imgHerbe.naturalHeight, px, py, TILE, TILE);
+                // Autres IDs (porte ouverte, piège, pièce, sortie...) → fond sol standard
+                if (feuilleOk) {
+                    ctx.drawImage(imgFeuille, 0, 0, TILE, TILE, px, py, TILE, TILE);
                 } else {
-                    ctx.fillStyle = '#1a2a1e';
+                    ctx.fillStyle = '#0a0a0a';
                     ctx.fillRect(px, py, TILE, TILE);
                 }
             }
