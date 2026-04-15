@@ -137,8 +137,9 @@ socket.on('stateUpdate', (state) => {
             if (myPlayer.isDead) {
                 hpDisplay.innerHTML = '<span style="color: #e74c3c; font-weight: bold;">MORT</span>';
             } else {
-                const maxHp = 2; // Maximum de vie configurable
-                hpDisplay.innerHTML = '❤️'.repeat(myPlayer.hp) + '🖤'.repeat(maxHp - myPlayer.hp);
+                const maxHp = 4;
+                const hp = Math.max(0, Math.min(myPlayer.hp, maxHp));
+                hpDisplay.innerHTML = '❤️'.repeat(hp) + '🖤'.repeat(maxHp - hp);
             }
         }
     }

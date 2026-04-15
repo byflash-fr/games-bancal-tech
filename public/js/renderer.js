@@ -37,7 +37,8 @@ const T = {
     PIEGE: 5, // piège (trou mortel)
     MUR: 6, // mur (autotile feuille.png)
     PIECE: 7, // pièce / sphère
-    PLAQUE: 8  // plaque de pression
+    PLAQUE: 8,  // plaque de pression
+    COEUR: 9   // coeur de soin
 };
 
 // ── Ressources ───────────────────────────────────────────────────────
@@ -49,6 +50,7 @@ function loadImg(key, src) {
 loadImg('herbe', '/assets/images/herbe.png');
 loadImg('feuille', '/assets/images/feuille.png');
 loadImg('piece', '/assets/images/piece.png');
+loadImg('coeur', '/assets/images/coeur.png');
 loadImg('pikkux', '/assets/images/pikkux.png');
 loadImg('pikkuy', '/assets/images/pikkuy.png');
 loadImg('sortie', '/assets/images/sortie.png');
@@ -57,6 +59,7 @@ loadImg('bille', '/assets/images/bille.png');
 // Sprites animés : { img, frames, speed(ms/frame) }
 const ANIM = {
     piece: { key: 'piece', frames: 10, speed: 100 },
+    coeur: { key: 'coeur', frames: 1, speed: 1000 },
     pikkux: { key: 'pikkux', frames: 4, speed: 120 },
     pikkuy: { key: 'pikkuy', frames: 4, speed: 120 },
     sortie: { key: 'sortie', frames: 9, speed: 150 },
@@ -458,6 +461,25 @@ function drawCoin(c) {
     }
 }
 
+// ── Coeurs (soin) ───────────────────────────────────────────────────────
+function drawHeart(h) {
+    const img = RES['coeur'];
+    if (img && img.complete && img.naturalWidth > 0) {
+        const size = 34;
+        ctx.drawImage(img, h.x - size / 2, h.y - size / 2, size, size);
+        return;
+    }
+
+    // Fallback si l'asset n'est pas encore chargé
+    ctx.fillStyle = '#ff4d6d';
+    ctx.beginPath();
+    ctx.arc(h.x - 7, h.y - 4, 7, 0, Math.PI * 2);
+    ctx.arc(h.x + 7, h.y - 4, 7, 0, Math.PI * 2);
+    ctx.lineTo(h.x, h.y + 12);
+    ctx.closePath();
+    ctx.fill();
+}
+
 // ── Pièges (tiles animés) ─────────────────────────────────────────────
 function drawTrap(t) {
     // On dessine le piège comme un sprite 40×40 centré sur t.x, t.y
@@ -785,6 +807,9 @@ function draw() {
 
     // 5. Pièces
     for (const c of level.coins) if (!c.collected) drawCoin(c);
+
+    // 5bis. Coeurs
+    if (level.hearts) for (const h of level.hearts) if (!h.collected) drawHeart(h);
 
     // 6. Pièges
     if (level.traps) for (const t of level.traps) drawTrap(t);

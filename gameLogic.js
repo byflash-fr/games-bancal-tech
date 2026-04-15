@@ -3,6 +3,8 @@ const PLAYER_R = 20;  // rayon du joueur
 const WALL_T = 40;    // taille d'un bloc (tile) de mur / épaisseur
 const TILE = 40;      // taille d'une tuile monde
 const SAFE_R = 120;   // rayon de dégagement (pour compatibilité)
+const BASE_HP = 2;
+const MAX_HP = 4;
 
 function getDist(p1, p2) { return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2)); }
 
@@ -121,6 +123,7 @@ function generateLevel(playerCount) {
     const ID_MUR = 6;
     const ID_PIECE = 7;
     const ID_PLAQUE = 8;
+    const ID_COEUR = 9;
 
     // Taille dépendante du nombre de joueurs (logique gen.js)
     const tailleH = 12 + (playerCount * 2);
@@ -192,6 +195,7 @@ function generateLevel(playerCount) {
         buttons: [],
         doors: [],
         coins: [],
+        hearts: [],
         traps: [],
         quests: [],
         spawnX: (departX * TILE) + TILE / 2,
@@ -247,6 +251,9 @@ function generateLevel(playerCount) {
                     // On ajoutera plus de pièges aléatoires après
                     level.traps.push({ x: cx + TILE / 2, y: cy + TILE / 2, active: true });
                     break;
+                case ID_COEUR:
+                    level.hearts.push({ x: cx + TILE / 2, y: cy + TILE / 2, collected: false });
+                    break;
             }
         }
     }
@@ -257,6 +264,8 @@ function generateLevel(playerCount) {
             if (matrice[y][x] === ID_SOL && !estCaseProtegee(matrice, x, y)) {
                 if (Math.random() < 0.15) { // 15% de chance pour une pièce
                     level.coins.push({ x: x * TILE + TILE / 2, y: y * TILE + TILE / 2, collected: false });
+                } else if (Math.random() < 0.03) { // 3% pour un coeur de soin
+                    level.hearts.push({ x: x * TILE + TILE / 2, y: y * TILE + TILE / 2, collected: false });
                 } else if (Math.random() < 0.08) { // 8% pour un piège
                     level.traps.push({ x: x * TILE + TILE / 2, y: y * TILE + TILE / 2, active: true });
                 }
@@ -383,6 +392,20 @@ function updateTriggers(players, level) {
         if (c.collected) collectedCoins++;
     }
 
+    for (let h of (level.hearts || [])) {
+        if (h.collected) continue;
+        for (let p of pList) {
+            if (p.isDead) continue;
+            const dx = p.x - h.x, dy = p.y - h.y;
+            if (dx * dx + dy * dy < 35 * 35) {
+                h.collected = true;
+                // Le coeur soigne 1 HP, sans dépasser le maximum.
+                p.hp = Math.min(MAX_HP, p.hp + 1);
+                break;
+            }
+        }
+    }
+
     const qBtn1 = level.quests.find(q => q.id === "btn1");
     if (qBtn1) qBtn1.done = level.buttons.find(b => b.id === 1)?.pressed || false;
 
@@ -498,7 +521,7 @@ function assignerSpawnsJoueurs(level, players) {
         player.vx = 0;
         player.vy = 0;
         player.isDead = false;
-        player.hp = 2;
+        player.hp = BASE_HP;
         player.invuln = 0;
     });
 }
