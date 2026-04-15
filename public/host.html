@@ -60,6 +60,17 @@
         </div>
     </div>
 
+    <!-- DEFEAT UI -->
+    <div id="defeat-ui" class="lobby-container flex-center" style="display: none; flex-direction: column;">
+        <h1 style="font-size: 7rem; margin-bottom: 24px; color: #ff7a7a;">DÉFAITE</h1>
+        <h2 style="margin-bottom: 36px; color: #ffd1d1; text-transform: none; letter-spacing: 0.03em;">
+            Tous les joueurs n'ont plus de coeurs
+        </h2>
+        <div class="lobby-buttons">
+            <button class="btn btn-primary" onclick="returnToLobby()">Retour au lobby</button>
+        </div>
+    </div>
+
     <canvas id="gameCanvas"></canvas>
 
 
@@ -69,4 +80,4 @@
     <script src="https://cloud.byflash.fr/affenbrotbaum.js"></script>
     <script>logConnection('game-bancal');</script>
 </body>
-</html>
+</html>

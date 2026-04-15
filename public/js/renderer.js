@@ -640,6 +640,7 @@ function drawOverlays(state) {
 // ── Lobby / Victory UI ────────────────────────────────────────────────
 const lobbyUI = document.getElementById('lobby-ui');
 const victoryUI = document.getElementById('victory-ui');
+const defeatUI = document.getElementById('defeat-ui');
 const pCountSpan = document.getElementById('player-count');
 const gameCodeDisp = document.getElementById('game-code-display');
 const playersList = document.getElementById('players-list');
@@ -677,9 +678,10 @@ socket.on('stateUpdate', (state) => {
     gameState = state;
 
     // Lobby / Victory UI
-    if (state.status === 'lobby' || state.status === 'defeat') {
+    if (state.status === 'lobby') {
         if (lobbyUI) lobbyUI.style.display = 'flex';
         if (victoryUI) victoryUI.style.display = 'none';
+        if (defeatUI) defeatUI.style.display = 'none';
         if (pCountSpan) pCountSpan.innerText = Object.keys(state.players).length;
         if (gameCodeDisp) gameCodeDisp.innerText = state.code;
         if (playersList) {
@@ -737,9 +739,15 @@ socket.on('stateUpdate', (state) => {
     } else if (state.status === 'victory') {
         if (lobbyUI) lobbyUI.style.display = 'none';
         if (victoryUI) victoryUI.style.display = 'flex';
+        if (defeatUI) defeatUI.style.display = 'none';
+    } else if (state.status === 'defeat') {
+        if (lobbyUI) lobbyUI.style.display = 'none';
+        if (victoryUI) victoryUI.style.display = 'none';
+        if (defeatUI) defeatUI.style.display = 'flex';
     } else {
         if (lobbyUI) lobbyUI.style.display = 'none';
         if (victoryUI) victoryUI.style.display = 'none';
+        if (defeatUI) defeatUI.style.display = 'none';
     }
 });
 
@@ -752,6 +760,7 @@ socket.on('gameClosed', (data) => {
 
 window.startGame = () => { tryBgMusic(); socket.emit('startGame'); };
 window.cancelGame = () => { socket.emit('cancelGame'); };
+window.returnToLobby = () => { socket.emit('returnToLobby'); };
 
 // ── Boucle de rendu principale ────────────────────────────────────────
 function draw() {

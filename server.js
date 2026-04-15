@@ -230,6 +230,31 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('returnToLobby', () => {
+        const code = socket.gameCode;
+        if (!code || !games[code] || socket.role !== 'host') return;
+
+        const game = games[code];
+        if (game.status !== 'defeat' && game.status !== 'victory') return;
+
+        game.status = 'lobby';
+        game.level = null;
+        game.countdown = 5;
+        game.timeLeft = 300;
+
+        for (const id in game.players) {
+            const p = game.players[id];
+            p.vx = 0;
+            p.vy = 0;
+            p.hp = 2;
+            p.isDead = false;
+            p.invuln = 0;
+            p.actionBlink = 0;
+        }
+
+        io.to(code).emit('stateUpdate', game);
+    });
+
     socket.on('input', (data) => {
         const code = socket.gameCode;
         if (code && games[code] && socket.role === 'player') {
@@ -312,6 +337,12 @@ setInterval(() => {
         if (gameState.status === 'playing') {
             if (gameLogic.checkWinCondition(gameState.players, gameState.level)) {
                 gameState.status = 'victory';
+            } else {
+                const playerList = Object.values(gameState.players);
+                const noAlivePlayers = playerList.length > 0 && playerList.every(p => p.isDead);
+                if (noAlivePlayers) {
+                    gameState.status = 'defeat';
+                }
             }
         }
 
