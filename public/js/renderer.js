@@ -76,6 +76,7 @@ function getColoredBille(hexColor) {
     buffer.width = baseImg.naturalWidth;
     buffer.height = baseImg.naturalHeight;
     const bctx = buffer.getContext('2d');
+    bctx.imageSmoothingEnabled = false;
 
     // 1. Dessiner l'image de base
     bctx.drawImage(baseImg, 0, 0);
@@ -208,6 +209,7 @@ function renderTilemap(level, layerType) {
 // ── Fog of War ───────────────────────────────────────────────────────
 const fogCanvas = document.createElement('canvas');
 const fogCtx = fogCanvas.getContext('2d', { willReadFrequently: true });
+fogCtx.imageSmoothingEnabled = false;
 
 let cachedSegments = null;
 let lastDoorsHash = '';
@@ -303,10 +305,13 @@ function drawFog(level, players) {
         const poly = calcVisibility({ x: p.x, y: p.y }, cachedSegments);
         if (!poly.length) continue;
 
+        const cx = Math.floor(canvas.width / 2);
+        const cy = Math.floor(canvas.height / 2);
+
         fogCtx.save();
-        fogCtx.translate(canvas.width / 2, canvas.height / 2);
+        fogCtx.translate(cx, cy);
         fogCtx.scale(camera.scale, camera.scale);
-        fogCtx.translate(-camera.x, -camera.y);
+        fogCtx.translate(-Math.floor(camera.x), -Math.floor(camera.y));
 
         fogCtx.beginPath();
         fogCtx.moveTo(poly[0].x, poly[0].y);
@@ -346,6 +351,8 @@ function updateCamera(level, players) {
     camera.x += (tx - camera.x) * 0.1;
     camera.y += (ty - camera.y) * 0.1;
     camera.scale += (ts - camera.scale) * 0.1;
+    // Évite les micro-tremblements du scale
+    camera.scale = Math.round(camera.scale * 1000) / 1000;
 }
 
 // ── Dessin d'un joueur ───────────────────────────────────────────────
@@ -752,15 +759,18 @@ function draw() {
 
     updateCamera(level, players);
 
+    const cx = Math.floor(canvas.width / 2);
+    const cy = Math.floor(canvas.height / 2);
+
     const pIds = Object.keys(players);
     const moving = pIds.some(id => { const p = players[id]; return p.vx !== 0 || p.vy !== 0; });
     if (status === 'playing' && moving) tryWalk(); else stopWalk();
 
     // ── Début du contexte monde ──────────────────────────────────────
     ctx.save();
-    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.translate(cx, cy);
     ctx.scale(camera.scale, camera.scale);
-    ctx.translate(-camera.x, -camera.y);
+    ctx.translate(-Math.floor(camera.x), -Math.floor(camera.y));
 
     // 1. Tilemap (Sol + Murs de base)
     renderTilemap(level, 'sol');
@@ -810,10 +820,10 @@ function draw() {
 
     // 12. Murs + Portes dessinés PAR-DESSUS le fog (visible même dans le brouillard)
     ctx.save();
-    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.translate(cx, cy);
     ctx.scale(camera.scale, camera.scale);
-    ctx.translate(-camera.x, -camera.y);
-
+    ctx.translate(-Math.floor(camera.x), -Math.floor(camera.y));
+    
     // Rendu des murs "fantômes" par-dessus le fog (pour la lisibilité)
     ctx.globalAlpha = 0.4;
     renderTilemap(level, 'murs');
