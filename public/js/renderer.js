@@ -98,10 +98,10 @@ function getColoredBille(hexColor) {
     return buffer;
 }
 
-function drawSprite(anim, cx, cy, size, frame = null) {
+function drawSprite(anim, cx, cy, size) {
     const img = RES[anim.key];
     if (!img.complete || !img.naturalWidth) return false;
-    const fi = (frame !== null) ? frame : (Math.floor(Date.now() / anim.speed) % anim.frames);
+    const fi = Math.floor(Date.now() / anim.speed) % anim.frames;
     const fw = img.naturalWidth / anim.frames;
     ctx.drawImage(img, fi * fw, 0, fw, img.naturalHeight,
         cx - size / 2, cy - size / 2, size, size);
@@ -484,8 +484,7 @@ function drawHeart(h) {
 function drawTrap(t) {
     // On dessine le piège comme un sprite 40×40 centré sur t.x, t.y
     // On choisit pikkux (horizontal) ou pikkuy (vertical)
-    const anim = (t.w > t.h) ? ANIM.pikkux : ANIM.pikkuy;
-    const ok = drawSprite(anim, t.x, t.y, TILE, 0); // Frame 0 pour désactiver l'animation
+    const ok = drawSprite(ANIM.pikkux, t.x, t.y, TILE);
     if (!ok) {
         ctx.fillStyle = '#c0392b';
         ctx.fillRect(t.x - TILE / 2, t.y - TILE / 2, TILE, TILE);
@@ -685,7 +684,7 @@ socket.on('stateUpdate', (newState) => {
         gameState.timeLeft = newState.timeLeft;
         gameState.countdown = newState.countdown;
         gameState.players = newState.players;
-        
+
         if (newState.level && gameState.level) {
             // On met à jour uniquement les propriétés dynamiques du niveau
             Object.assign(gameState.level, newState.level);
@@ -860,7 +859,7 @@ function draw() {
     ctx.translate(cx, cy);
     ctx.scale(camera.scale, camera.scale);
     ctx.translate(-Math.floor(camera.x), -Math.floor(camera.y));
-    
+
     // Rendu des murs "fantômes" par-dessus le fog (pour la lisibilité)
     ctx.globalAlpha = 0.4;
     renderTilemap(level, 'murs');
