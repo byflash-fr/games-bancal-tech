@@ -138,15 +138,14 @@ function construireSalleSortie(matrice, cx, cy) {
  */
 function estSolvable(matrice, start, p1, p2, sortie, milieuX) {
     const rows = matrice.length, cols = matrice[0].length;
-    let hasP1 = false, hasP2 = false;
-    let reachable = new Set();
+    let hasP1 = false, hasP2 = false, hasExit = false;
     let queue = [start.y * cols + start.x];
     let visited = new Set(queue);
 
     // On fait plusieurs passes car l'activation d'une plaque débloque de nouvelles zones
     for (let pass = 0; pass < 3; pass++) {
         let addedInPass = 0;
-        let localQueue = [...queue]; // On repart des points déjà atteints
+        let localQueue = [...queue];
 
         while (localQueue.length > 0) {
             const idx = localQueue.shift();
@@ -155,8 +154,7 @@ function estSolvable(matrice, start, p1, p2, sortie, milieuX) {
             // Activation des plaques
             if (x === p1.x && y === p1.y) hasP1 = true;
             if (x === p2.x && y === p2.y) hasP2 = true;
-            // Victoire !
-            if (x === sortie.x && y === sortie.y) return true;
+            if (x === sortie.x && y === sortie.y) hasExit = true;
 
             const neighbors = [{dx:0,dy:1}, {dx:0,dy:-1}, {dx:1,dy:0}, {dx:-1,dy:0}];
             for (const d of neighbors) {
@@ -166,9 +164,9 @@ function estSolvable(matrice, start, p1, p2, sortie, milieuX) {
                 if (visited.has(nIdx)) continue;
 
                 const tile = matrice[ny][nx];
-                if (tile === 6) continue; // Mur : infranchissable
+                if (tile === 6) continue; // Mur
                 
-                if (tile === 2) { // Porte : bloquante si plaque non activée
+                if (tile === 2) { // Porte
                     const isCentral = (nx === milieuX);
                     if (isCentral && !hasP1) continue; 
                     if (!isCentral && !hasP2) continue;
@@ -180,9 +178,21 @@ function estSolvable(matrice, start, p1, p2, sortie, milieuX) {
                 addedInPass++;
             }
         }
-        if (addedInPass === 0) break; // Plus rien à explorer
+        if (addedInPass === 0) break;
     }
-    return false;
+
+    if (!hasExit) return false;
+
+    // Vérification finale : tous les sols accessibles (ID_SOL=1, ID_PLAQUE=8, ID_SORTIE=4, ID_DEPART=3)
+    for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+            const t = matrice[y][x];
+            if (t === 1 || t === 8 || t === 4 || t === 3) {
+                if (!visited.has(y * cols + x)) return false;
+            }
+        }
+    }
+    return true;
 }
 
 function generateLevel(playerCount) {
