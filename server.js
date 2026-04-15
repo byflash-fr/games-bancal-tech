@@ -117,7 +117,7 @@ function emitDeltaTick(gameCode) {
         _compressed: true,
         _delta: true
     };
-    io.volatile.to(gameState.hostSocketId).emit('stateUpdate', payload);
+    io.volatile.to(gameCode).emit('stateUpdate', payload);
     return true;
 }
 
@@ -388,12 +388,15 @@ io.on('connection', (socket) => {
                 player.vy = data.dy;
                 markGameDirty(code);
             } else if (data.type === 'action') {
-                if (data.button === 'B') {
+                if (data.button === 'A') {
                     player.actionBlink = 15;
                     // Tentation de réanimation
                     if (gameLogic.tryRevive(player, games[code].players)) {
                         markGameDirty(code);
                     }
+                } else if (data.button === 'B') {
+                    player.actionBlink = 15;
+                    markGameDirty(code);
                 }
             }
         }

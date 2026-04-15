@@ -58,17 +58,17 @@ function getColoredBille(hexColor) {
     return buffer;
 }
 
-function drawCharacter(player) {
-    if (!charCanvas) return;
-    const ctx = charCanvas.getContext('2d');
-    ctx.clearRect(0, 0, charCanvas.width, charCanvas.height);
+function drawCharacter(player, targetCanvas = charCanvas) {
+    if (!targetCanvas) return;
+    const ctx = targetCanvas.getContext('2d');
+    ctx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
 
     const coloredBille = getColoredBille(player.color);
     if (coloredBille) {
         ctx.save();
-        ctx.translate(charCanvas.width / 2, charCanvas.height / 2);
+        ctx.translate(targetCanvas.width / 2, targetCanvas.height / 2);
         const fw = coloredBille.width / 20; // 20 frames
-        const size = 180;
+        const size = targetCanvas.width * 0.75;
         ctx.drawImage(coloredBille, 0, 0, fw, coloredBille.naturalHeight, -size / 2, -size / 2, size, size);
 
         // Yeux stylisés
@@ -86,8 +86,8 @@ function drawCharacter(player) {
     } else {
         // Fallback
         ctx.save();
-        ctx.translate(charCanvas.width / 2, charCanvas.height / 2);
-        ctx.scale(2.5, 2.5);
+        ctx.translate(targetCanvas.width / 2, targetCanvas.height / 2);
+        ctx.scale(targetCanvas.width / 80, targetCanvas.width / 80);
         ctx.fillStyle = player.color;
         ctx.beginPath();
         ctx.arc(0, 0, 20, 0, Math.PI * 2);
@@ -107,6 +107,10 @@ socket.on('stateUpdate', (state) => {
     if (state.status === 'lobby' || state.status === 'victory' || state.status === 'defeat') {
         if (state.status === 'lobby') {
             waitingUI.style.display = 'flex';
+            if (myPlayer) {
+                const lobbyCanvas = document.getElementById('lobby-char-canvas');
+                drawCharacter(myPlayer, lobbyCanvas);
+            }
         }
         revealUI.style.display = 'none';
         controllerUI.style.display = 'none';

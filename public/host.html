@@ -52,21 +52,16 @@
     </div>
 
     <!-- VICTORY UI -->
-    <div id="victory-ui" class="lobby-container flex-center" style="display: none; flex-direction: column;">
-        <h1 style="font-size: 8rem; margin-bottom: 40px;">VICTOIRE</h1>
-        <div class="lobby-buttons">
+    <div id="victory-ui" class="lobby-container flex-center" style="display: none; flex-direction: column; background: none; border: none; box-shadow: none;">
+        <div class="lobby-buttons" style="margin-top: 160px;">
             <button class="btn btn-primary" onclick="startGame()">Recommencer</button>
             <button class="btn btn-outline" onclick="cancelGame()">Quitter</button>
         </div>
     </div>
 
     <!-- DEFEAT UI -->
-    <div id="defeat-ui" class="lobby-container flex-center" style="display: none; flex-direction: column;">
-        <h1 style="font-size: 7rem; margin-bottom: 24px; color: #ff7a7a;">DÉFAITE</h1>
-        <h2 style="margin-bottom: 36px; color: #ffd1d1; text-transform: none; letter-spacing: 0.03em;">
-            Tous les joueurs n'ont plus de coeurs
-        </h2>
-        <div class="lobby-buttons">
+    <div id="defeat-ui" class="lobby-container flex-center" style="display: none; flex-direction: column; background: none; border: none; box-shadow: none;">
+        <div class="lobby-buttons" style="margin-top: 160px;">
             <button class="btn btn-primary" onclick="returnToLobby()">Retour au lobby</button>
         </div>
     </div>
