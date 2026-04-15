@@ -117,7 +117,7 @@ function emitDeltaTick(gameCode) {
         _compressed: true,
         _delta: true
     };
-    io.volatile.to(gameCode).emit('stateUpdate', payload);
+    io.volatile.to(gameState.hostSocketId).emit('stateUpdate', payload);
     return true;
 }
 
