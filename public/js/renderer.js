@@ -42,6 +42,13 @@ walkingSound.volume = 0.4;
 const coinImg = new Image();
 coinImg.src = '/assets/images/piece.png';
 
+const feuilleImg = new Image();
+feuilleImg.src = '/assets/image/feuille.png';
+let feuillePattern = null;
+feuilleImg.onload = () => {
+    feuillePattern = ctx.createPattern(feuilleImg, 'repeat');
+};
+
 function tryPlayBackgroundMusic() {
     if (!backgroundMusic.paused) return;
     backgroundMusic.play().catch(() => {
@@ -270,6 +277,10 @@ function draw() {
             D: '🚪 SORTIE'
         };
         for (const [key, room] of Object.entries(gameState.level.rooms)) {
+            if (feuillePattern) {
+                ctx.fillStyle = feuillePattern;
+                ctx.fillRect(room.x, room.y, room.w, room.h);
+            }
             ctx.fillStyle = roomColors[key];
             ctx.fillRect(room.x, room.y, room.w, room.h);
             ctx.fillStyle = roomColors[key].replace('0.07', '0.25');
@@ -471,14 +482,20 @@ function draw() {
         const isThick = (w.w >= WALL_T_THICK || w.h >= WALL_T_THICK) &&
                         (Math.max(w.w, w.h) / Math.min(w.w, w.h) >= 3);
         const isMaze = Math.min(w.w, w.h) <= 22; // mur de labyrinthe fin
+        
+        if (feuillePattern) {
+            ctx.fillStyle = feuillePattern;
+            ctx.fillRect(w.x, w.y, w.w, w.h);
+        }
+
         if (isMaze) {
-            ctx.fillStyle = '#2a2a3a';
+            ctx.fillStyle = feuillePattern ? 'rgba(42, 42, 58, 0.8)' : '#2a2a3a';
             ctx.fillRect(w.x, w.y, w.w, w.h);
             ctx.strokeStyle = '#3a3a55';
             ctx.lineWidth = 0.5;
             ctx.strokeRect(w.x, w.y, w.w, w.h);
         } else {
-            ctx.fillStyle = '#0d0d14';
+            ctx.fillStyle = feuillePattern ? 'rgba(13, 13, 20, 0.8)' : '#0d0d14';
             ctx.fillRect(w.x, w.y, w.w, w.h);
             ctx.strokeStyle = '#00ffcc';
             ctx.lineWidth = 1.5;
