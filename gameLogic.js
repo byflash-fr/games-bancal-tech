@@ -1,6 +1,6 @@
 // ── Constantes ──────────────────────────────────────────────
 const PLAYER_R = 20;  // rayon du joueur
-const WALL_T = 60;    // taille d'un bloc (tile) de mur / épaisseur
+const WALL_T = 40;    // taille d'un bloc (tile) de mur / épaisseur
 const SAFE_R = 120;   // rayon de dégagement (pour compatibilité)
 
 function getDist(p1, p2) { return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2)); }
@@ -123,7 +123,7 @@ function generateLevel(playerCount) {
     // Taille dépendante du nombre de joueurs (logique gen.js)
     const tailleH = 12 + (playerCount * 2);
     const tailleL = largeurCalculée(tailleH);
-    const TILE = 80; // Taille d'une case sur l'écran
+    const TILE = 40; // Taille d'une case sur l'écran (alignée sur le rendu)
 
     let matrice = [];
     for (let y = 0; y < tailleH; y++) {
@@ -195,7 +195,8 @@ function generateLevel(playerCount) {
         quests: [],
         spawnX: (departX * TILE) + TILE / 2,
         spawnY: (departY * TILE) + TILE / 2,
-        exit: { x: 0, y: 0, r: 40, active: false }
+        exit: { x: 0, y: 0, r: 40, active: false },
+        geometrie: matrice // On expose la matrice brute pour le renderer (Autotiling)
     };
 
     const reqCount1 = Math.max(1, Math.ceil(playerCount / 2));

@@ -27,10 +27,14 @@ const TILE = 40; // taille d'une tuile en pixels monde
 
 // IDs de tuile
 const T = {
-    HERBE : 1, // sol traversable
-    MUR   : 2, // mur (autotile feuille.png)
-    SPAWN : 3, // point de spawn (sol visible)
-    PIEGE : 5, // piège (dessous = herbe, dessus = sprite animé)
+    HERBE  : 1, // sol traversable
+    PORTE  : 2, // porte
+    SPAWN  : 3, // point de spawn
+    SORTIE : 4, // sortie (sprite animé)
+    PIEGE  : 5, // piège (trou mortel)
+    MUR    : 6, // mur (autotile feuille.png)
+    PIECE  : 7, // pièce / sphère
+    PLAQUE : 8  // plaque de pression
 };
 
 // ── Ressources ───────────────────────────────────────────────────────
@@ -72,34 +76,10 @@ let matrixW = 0, matrixH = 0;
 let currentLevelId = null;
 
 function buildMatrix(level) {
-    const cols = Math.ceil(level.width  / TILE);
-    const rows = Math.ceil(level.height / TILE);
-    matrixW = cols; matrixH = rows;
-
-    // 1. Tout en herbe
-    const mat = Array.from({length: rows}, () => new Array(cols).fill(T.HERBE));
-
-    // 2. Murs solides → T.MUR
-    for (const w of level.walls) {
-        const c0 = Math.floor(w.x / TILE);
-        const r0 = Math.floor(w.y / TILE);
-        const c1 = Math.ceil((w.x + w.w) / TILE);
-        const r1 = Math.ceil((w.y + w.h) / TILE);
-        for (let r = r0; r < r1; r++)
-            for (let c = c0; c < c1; c++)
-                if (r >= 0 && r < rows && c >= 0 && c < cols)
-                    mat[r][c] = T.MUR;
-    }
-
-    // 3. Portes fermées → T.MUR (recalculé dynamiquement, voir renderDoors)
-    // On ne les intègre pas dans la matrice statique
-
-    // 4. Spawn
-    const sc = Math.floor(level.spawnX / TILE);
-    const sr = Math.floor(level.spawnY / TILE);
-    if (sr >= 0 && sr < rows && sc >= 0 && sc < cols) mat[sr][sc] = T.SPAWN;
-
-    tileMatrix = mat;
+    if (!level.geometrie) return;
+    tileMatrix = level.geometrie;
+    matrixH = tileMatrix.length;
+    matrixW = tileMatrix[0].length;
     computeAutotile();
 }
 
@@ -111,12 +91,13 @@ function computeAutotile() {
     for (let r = 0; r < matrixH; r++) {
         for (let c = 0; c < matrixW; c++) {
             if (tileMatrix[r][c] !== T.MUR) continue;
-            let v = [0,0,0,0]; // haut gauche droite bas
-            if (isWall(r-1,c)) v[0]=1;
-            if (isWall(r,c-1)) v[1]=1;
-            if (isWall(r,c+1)) v[2]=1;
-            if (isWall(r+1,c)) v[3]=1;
-            tileAppearance[r][c] = 1*v[0] + 2*v[1] + 4*v[2] + 8*v[3];
+            // Bitmask 4 voisins : Haut=1, Gauche=2, Droite=4, Bas=8
+            let bitmask = 0;
+            if (isWall(r-1, c)) bitmask += 1; // Haut
+            if (isWall(r, c-1)) bitmask += 2; // Gauche
+            if (isWall(r, c+1)) bitmask += 4; // Droite
+            if (isWall(r+1, c)) bitmask += 8; // Bas
+            tileAppearance[r][c] = bitmask;
         }
     }
 }
@@ -125,7 +106,7 @@ function computeAutotile() {
 function renderTilemap(doors) {
     if (!tileMatrix) return;
 
-    // Ensemble des portes fermées (cases bloquées dynamiquement)
+    // Portes fermées (bloquées pour le rendu)
     const doorSet = new Set();
     for (const d of doors) {
         if (!d.open) {
@@ -135,42 +116,33 @@ function renderTilemap(doors) {
         }
     }
 
-    const feuilleImg = RES['feuille'];
-    const herbeImg   = RES['herbe'];
-    const feuilleOk  = feuilleImg.complete && feuilleImg.naturalWidth > 0;
-    const herbeOk    = herbeImg.complete   && herbeImg.naturalWidth  > 0;
+    const imgFeuille = RES['feuille'];
+    const imgHerbe   = RES['herbe'];
+    const feuilleOk  = imgFeuille.complete && imgFeuille.naturalWidth > 0;
+    const herbeOk    = imgHerbe.complete   && imgHerbe.naturalWidth  > 0;
 
     for (let r = 0; r < matrixH; r++) {
         for (let c = 0; c < matrixW; c++) {
             const px = c * TILE, py = r * TILE;
             const id = tileMatrix[r][c];
             const isDoor = doorSet.has(`${r},${c}`);
-            const isWallTile = id === T.MUR || isDoor;
+            const isWall = id === T.MUR || isDoor;
 
-            if (isWallTile) {
-                // Autotile feuille.png : chaque variation est à x=bitmask*TILE, y=ligne*TILE
-                // Ligne 1 = murs (y = 1*TILE = 40)
+            // 1. Dessiner le sol par défaut dessous (si ce n'est pas un mur plein)
+            if (herbeOk && !isWall) {
+                ctx.drawImage(imgHerbe, px, py, TILE, TILE);
+            }
+
+            // 2. Dessiner le Mur (Autotiling)
+            if (isWall) {
                 const bitmask = isDoor ? 0 : (tileAppearance[r][c] || 0);
                 const srcX = bitmask * TILE;
-                const srcY = 1 * TILE; // ligne des murs
+                const srcY = 1 * TILE; // 2ème ligne de feuille.png
 
-                if (feuilleOk && feuilleImg.naturalWidth > srcX + TILE && feuilleImg.naturalHeight > srcY + TILE) {
-                    ctx.drawImage(feuilleImg, srcX, srcY, TILE, TILE, px, py, TILE, TILE);
+                if (feuilleOk) {
+                    ctx.drawImage(imgFeuille, srcX, srcY, TILE, TILE, px, py, TILE, TILE);
                 } else {
-                    // Fallback couleur
                     ctx.fillStyle = isDoor ? '#7f3030' : '#2a2a3a';
-                    ctx.fillRect(px, py, TILE, TILE);
-                    ctx.strokeStyle = '#00ffcc';
-                    ctx.lineWidth = 0.5;
-                    ctx.strokeRect(px, py, TILE, TILE);
-                }
-            } else {
-                // Sol herbe
-                if (herbeOk) {
-                    ctx.drawImage(herbeImg, 0, 0, herbeImg.naturalWidth, herbeImg.naturalHeight,
-                                  px, py, TILE, TILE);
-                } else {
-                    ctx.fillStyle = id === T.SPAWN ? '#1e3a2e' : '#1a2a1e';
                     ctx.fillRect(px, py, TILE, TILE);
                 }
             }
