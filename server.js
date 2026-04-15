@@ -222,6 +222,7 @@ io.on('connection', (socket) => {
             level: gameLogic.generateLevel(2),
             netElapsed: 0,
             netForceElapsed: 0,
+            heartTimer: 0,
             netDirty: true
         };
 
@@ -477,8 +478,23 @@ setInterval(() => {
                 gameState.status = 'victory';
             } else {
                 const playerList = Object.values(gameState.players);
+                // Si un seul joueur reste (déconnexion massive), on ferme la partie
+                if (playerList.length < 2) {
+                    io.to(code).emit('gameClosed', { reason: 'not-enough-players' });
+                    delete games[code];
+                    continue;
+                }
+                
                 const noAlivePlayers = playerList.length > 0 && playerList.every(p => p.isDead);
                 if (noAlivePlayers) gameState.status = 'defeat';
+            }
+
+            // Gestion de la réapparition des coeurs (30s = 30000ms)
+            gameState.heartTimer += TICK_RATE;
+            if (gameState.heartTimer >= 30000) {
+                gameLogic.respawnHearts(gameState.level, Object.keys(gameState.players).length);
+                gameState.heartTimer = 0;
+                stateChanged = true;
             }
             if (gameState.status !== prevStatus) stateChanged = true;
         }

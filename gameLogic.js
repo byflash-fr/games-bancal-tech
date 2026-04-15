@@ -260,7 +260,7 @@ function generateLevel(playerCount) {
                     reqCount: (currentId === 1 ? req1 : req2), 
                     color: (currentId === 1 ? '#3498db' : '#e74c3c'),
                     pressed: false, currentCount: 0, 
-                    sticky: (playerCount <= 1 || currentId === 1),
+                    sticky: true,
                     label: (currentId === 1 ? 'PONT' : 'VERROU')
                 });
             } else if (cell === ID_SORTIE) { level.exit.x = cx + TILE / 2; level.exit.y = cy + TILE / 2; }
@@ -315,7 +315,7 @@ function checkWallCollision(p, level) {
 }
 
 function applyPhysics(player, level, dt) {
-    if (player.isDead) return;
+    if (!level || player.isDead) return;
     if (player.invuln > 0) player.invuln = Math.max(0, player.invuln - dt * 60);
     
     // OPTIMISATION : On saute le traitement physique lourd si le joueur ne bouge pas
@@ -332,6 +332,7 @@ function applyPhysics(player, level, dt) {
 }
 
 function updateTriggers(players, level) {
+    if (!level || !level.buttons) return;
     level.buttons.forEach(b => { if (!b.sticky || !b.pressed) b.pressed = false; b.currentCount = 0; });
     
     for (let pId in players) {
@@ -379,7 +380,7 @@ function updateTriggers(players, level) {
 
 function checkWinCondition(players, level) {
     const pList = Object.values(players);
-    if (pList.length === 0 || !level.exit.active || pList.every(p => p.isDead)) return false;
+    if (!level || pList.length === 0 || !level.exit.active || pList.every(p => p.isDead)) return false;
     return pList.every(p => p.isDead || getDistSq(p, level.exit) < (level.exit.r + PLAYER_R)**2);
 }
 
@@ -445,4 +446,41 @@ function assignerSpawnsJoueurs(level, players) {
     });
 }
 
-module.exports = { generateLevel, applyPhysics, updateTriggers, checkWinCondition, adjustDifficulty, assignerSpawnsJoueurs, tryRevive };
+/**
+ * Fait réapparaître des coeurs si nécessaire (chaque 30s géré par le serveur).
+ * Limite max : 2 * nombre de joueurs sur la carte.
+ */
+function respawnHearts(level, playerCount) {
+    if (!level || !level.geometrie) return;
+    const maxHearts = Math.max(2, playerCount * 2);
+    const currentHearts = level.hearts.filter(h => !h.collected).length;
+    
+    if (currentHearts >= maxHearts) return;
+
+    const spawnCount = Math.min(2, maxHearts - currentHearts);
+    const matrice = level.geometrie;
+    let candidates = [];
+    
+    for (let y = 0; y < matrice.length; y++) {
+        for (let x = 0; x < matrice[0].length; x++) {
+            if (matrice[y][x] === 1 && !estCaseProtegee(matrice, x, y)) {
+                // Vérifie qu'il n'y a pas déjà un coeur ici (simple distance)
+                const cx = x * TILE + TILE / 2, cy = y * TILE + TILE / 2;
+                const exists = level.hearts.find(h => !h.collected && Math.abs(h.x - cx) < 5 && Math.abs(h.y - cy) < 5);
+                if (!exists) candidates.push({ x: cx, y: cy });
+            }
+        }
+    }
+
+    for (let i = 0; i < spawnCount && candidates.length > 0; i++) {
+        const idx = Math.floor(Math.random() * candidates.length);
+        const spawn = candidates.splice(idx, 1)[0];
+        level.hearts.push({ x: spawn.x, y: spawn.y, collected: false });
+        // On rajoute le type pour la grille (utile si on veut utiliser la grille pour les collisions)
+        const newHeart = level.hearts[level.hearts.length - 1];
+        newHeart.type = 'heart';
+        level.grid.insert(newHeart);
+    }
+}
+
+module.exports = { generateLevel, applyPhysics, updateTriggers, checkWinCondition, adjustDifficulty, assignerSpawnsJoueurs, tryRevive, respawnHearts };
