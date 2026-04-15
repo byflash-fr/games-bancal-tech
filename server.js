@@ -36,7 +36,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-const PORT = process.env.PORT || 3000;
+const DEFAULT_PORT = parseInt(process.env.PORT, 10) || 3000;
 const LOCAL_IP = getLocalIP();
 // QR Code should redirect to the IP without the port + /<code_de_la_partie>
 // We assume it's deployed on standard 80/443 port for production, but locally we useLOCAL_IP
@@ -372,6 +372,23 @@ setInterval(() => {
     }
 }, 1000);
 
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Bancal Server running at http://localhost:${PORT}`);
+let currentPort = DEFAULT_PORT;
+
+function startServer(port) {
+    currentPort = port;
+    server.listen(port, '0.0.0.0', () => {
+        console.log(`Bancal Server running at http://localhost:${port}`);
+    });
+}
+
+server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        const fallbackPort = currentPort + 1;
+        console.warn(`Port ${currentPort} déjà utilisé. Tentative sur ${fallbackPort}...`);
+        startServer(fallbackPort);
+        return;
+    }
+    throw err;
 });
+
+startServer(DEFAULT_PORT);
