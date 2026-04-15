@@ -155,7 +155,12 @@ joystickZone.style.touchAction = 'none';
 let joystickActive = false;
 let startX, startY;
 const MAX_RADIUS = 50;
+const INPUT_SEND_INTERVAL_MS = 33;
+const INPUT_EPSILON = 0.02;
 let uiJoystick;
+let lastInputSentAt = 0;
+let lastSentDx = 0;
+let lastSentDy = 0;
 
 // Create visual joystick knob
 uiJoystick = document.createElement('div');
@@ -199,20 +204,36 @@ joystickZone.addEventListener('pointermove', (e) => {
 
     uiJoystick.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
 
-    // Normalize coordinates -1 to 1
-    socket.emit('input', { type: 'move', dx: dx / MAX_RADIUS, dy: dy / MAX_RADIUS });
+    // Normalize coordinates -1 to 1 and throttle network traffic.
+    const ndx = dx / MAX_RADIUS;
+    const ndy = dy / MAX_RADIUS;
+    const now = Date.now();
+    const changedEnough = Math.abs(ndx - lastSentDx) > INPUT_EPSILON || Math.abs(ndy - lastSentDy) > INPUT_EPSILON;
+
+    if (changedEnough && now - lastInputSentAt >= INPUT_SEND_INTERVAL_MS) {
+        socket.emit('input', { type: 'move', dx: ndx, dy: ndy });
+        lastInputSentAt = now;
+        lastSentDx = ndx;
+        lastSentDy = ndy;
+    }
 });
 
 joystickZone.addEventListener('pointerup', () => {
     joystickActive = false;
     uiJoystick.style.display = 'none';
     socket.emit('input', { type: 'move', dx: 0, dy: 0 });
+    lastInputSentAt = Date.now();
+    lastSentDx = 0;
+    lastSentDy = 0;
 });
 joystickZone.addEventListener('pointerleave', () => {
     if (joystickActive) {
         joystickActive = false;
         uiJoystick.style.display = 'none';
         socket.emit('input', { type: 'move', dx: 0, dy: 0 });
+        lastInputSentAt = Date.now();
+        lastSentDx = 0;
+        lastSentDy = 0;
     }
 });
 
