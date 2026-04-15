@@ -176,6 +176,20 @@ io.on('connection', (socket) => {
         io.to(code).emit('stateUpdate', game);
         callback({ success: true, code: code });
         console.log(`Player ${playerPseudo} joined ${code}`);
+        game.players[socket.id] = {
+            id: socket.id,
+            pseudo: playerPseudo || `Joueur ${pCount + 1}`,
+            x: spawnX,
+            y: spawnY,
+            vx: 0,
+            vy: 0,
+            actionBlink: 0,
+            color: chosenColor,
+            shape: chosenShape,
+            // NOUVELLES PROPRIÉTÉS POUR LES PIÈGES
+            hp: 2,
+            isDead: false,
+            invuln: 0};
     });
 
     socket.on('startGame', () => {
@@ -236,11 +250,18 @@ io.on('connection', (socket) => {
                     delete games[code].players[socket.id];
                     
                     // Only end the game if no players left AND game is in progress
+                    const currentPlayersCount = Object.keys(games[code].players).length;
                     const gameInProgress = games[code].status === 'starting' || games[code].status === 'playing';
-                    if (Object.keys(games[code].players).length === 0 && gameInProgress) {
+                    
+                    if (currentPlayersCount === 0 && gameInProgress) {
                         console.log(`Game ${code} ended because all players left during gameplay.`);
                         io.to(code).emit('gameClosed', { reason: 'no-players' });
                         delete games[code];
+                    } else if (gameInProgress) {
+                        // ADAPTATION DYNAMIQUE : On met à jour les quêtes et les boutons
+                        gameLogic.adjustDifficulty(games[code].level, currentPlayersCount);
+                        io.to(code).emit('stateUpdate', games[code]);
+                        console.log(`Game ${code} dynamically adjusted for ${currentPlayersCount} players.`);
                     } else {
                         io.to(code).emit('stateUpdate', games[code]);
                     }
