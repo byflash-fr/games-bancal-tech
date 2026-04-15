@@ -132,40 +132,107 @@ function construireSalleSortie(matrice, cx, cy) {
     matrice[cy + (dy/2)][cx + (dx/2)] = ID_SOL;
 }
 
+/** 
+ * Vérifie si le niveau est finissable (algorithme BFS multi-passes).
+ * On doit pouvoir atteindre la Plaque 1 -> Ouvrir Porte Centrale -> Atteindre Plaque 2 -> Ouvrir Porte Sortie -> Atteindre Sortie.
+ */
+function estSolvable(matrice, start, p1, p2, sortie, milieuX) {
+    const rows = matrice.length, cols = matrice[0].length;
+    let hasP1 = false, hasP2 = false;
+    let reachable = new Set();
+    let queue = [start.y * cols + start.x];
+    let visited = new Set(queue);
+
+    // On fait plusieurs passes car l'activation d'une plaque débloque de nouvelles zones
+    for (let pass = 0; pass < 3; pass++) {
+        let addedInPass = 0;
+        let localQueue = [...queue]; // On repart des points déjà atteints
+
+        while (localQueue.length > 0) {
+            const idx = localQueue.shift();
+            const x = idx % cols, y = Math.floor(idx / cols);
+
+            // Activation des plaques
+            if (x === p1.x && y === p1.y) hasP1 = true;
+            if (x === p2.x && y === p2.y) hasP2 = true;
+            // Victoire !
+            if (x === sortie.x && y === sortie.y) return true;
+
+            const neighbors = [{dx:0,dy:1}, {dx:0,dy:-1}, {dx:1,dy:0}, {dx:-1,dy:0}];
+            for (const d of neighbors) {
+                const nx = x + d.dx, ny = y + d.dy;
+                if (ny < 0 || ny >= rows || nx < 0 || nx >= cols) continue;
+                const nIdx = ny * cols + nx;
+                if (visited.has(nIdx)) continue;
+
+                const tile = matrice[ny][nx];
+                if (tile === 6) continue; // Mur : infranchissable
+                
+                if (tile === 2) { // Porte : bloquante si plaque non activée
+                    const isCentral = (nx === milieuX);
+                    if (isCentral && !hasP1) continue; 
+                    if (!isCentral && !hasP2) continue;
+                }
+
+                visited.add(nIdx);
+                queue.push(nIdx);
+                localQueue.push(nIdx);
+                addedInPass++;
+            }
+        }
+        if (addedInPass === 0) break; // Plus rien à explorer
+    }
+    return false;
+}
+
 function generateLevel(playerCount) {
     const ID_SOL = 1, ID_PORTE = 2, ID_DEPART = 3, ID_SORTIE = 4, ID_PIEGE = 5, ID_MUR = 6, ID_PLAQUE = 8;
     const tailleH = 12 + (playerCount * 2);
     const tailleL = largeurCalculée(tailleH);
-    let matrice = Array.from({ length: tailleH }, (_, y) => 
-        Array.from({ length: tailleL }, (_, x) => 
-            (y === 0 || y === tailleH - 1 || x === 0 || x === tailleL - 1) ? ID_MUR : ID_SOL
-        )
-    );
+    
+    let matrice, milieuX, departX, departY, p1X, p1Y, p2X, p2Y, arriveX, arriveY;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 50;
 
-    const milieuX = Math.floor(tailleL / 2);
-    for (let y = 1; y < tailleH - 1; y++) matrice[y][milieuX] = ID_MUR;
-    matrice[tirerNombreAleatoire(2, tailleH - 3)][milieuX] = ID_PORTE;
+    // Boucle de génération avec vérification de solvabilité
+    while (attempts < MAX_ATTEMPTS) {
+        attempts++;
+        matrice = Array.from({ length: tailleH }, (_, y) => 
+            Array.from({ length: tailleL }, (_, x) => 
+                (y === 0 || y === tailleH - 1 || x === 0 || x === tailleL - 1) ? ID_MUR : ID_SOL
+            )
+        );
 
-    const departX = tirerNombreAleatoire(1, milieuX - 1), departY = tirerNombreAleatoire(1, tailleH - 2);
-    matrice[departY][departX] = ID_DEPART;
+        milieuX = Math.floor(tailleL / 2);
+        for (let y = 1; y < tailleH - 1; y++) matrice[y][milieuX] = ID_MUR;
+        matrice[tirerNombreAleatoire(2, tailleH - 3)][milieuX] = ID_PORTE;
 
-    let p1X, p1Y;
-    do { p1X = tirerNombreAleatoire(1, milieuX - 1); p1Y = tirerNombreAleatoire(1, tailleH - 2); } 
-    while (p1X === departX && p1Y === departY);
-    matrice[p1Y][p1X] = ID_PLAQUE;
+        departX = tirerNombreAleatoire(1, milieuX - 1); departY = tirerNombreAleatoire(1, tailleH - 2);
+        matrice[departY][departX] = ID_DEPART;
 
-    const margin = 4;
-    const arriveX = tirerNombreAleatoire(milieuX + margin, tailleL - margin - 1);
-    const arriveY = tirerNombreAleatoire(margin, tailleH - margin - 1);
-    construireSalleSortie(matrice, arriveX, arriveY);
+        do { p1X = tirerNombreAleatoire(1, milieuX - 1); p1Y = tirerNombreAleatoire(1, tailleH - 2); } 
+        while (p1X === departX && p1Y === departY);
+        matrice[p1Y][p1X] = ID_PLAQUE;
 
-    let p2X, p2Y;
-    do { p2X = tirerNombreAleatoire(milieuX + 1, tailleL - 2); p2Y = tirerNombreAleatoire(1, tailleH - 2); } 
-    while (matrice[p2Y][p2X] !== ID_SOL);
-    matrice[p2Y][p2X] = ID_PLAQUE;
+        const margin = 4;
+        arriveX = tirerNombreAleatoire(milieuX + margin, tailleL - margin - 1);
+        arriveY = tirerNombreAleatoire(margin, tailleH - margin - 1);
+        construireSalleSortie(matrice, arriveX, arriveY);
 
-    ajouterLabyrinthe(matrice, 1, milieuX - 1, 1, tailleH - 2);
-    ajouterLabyrinthe(matrice, milieuX + 1, tailleL - 2, 1, tailleH - 2);
+        do { p2X = tirerNombreAleatoire(milieuX + 1, tailleL - 2); p2Y = tirerNombreAleatoire(1, tailleH - 2); } 
+        while (matrice[p2Y][p2X] !== ID_SOL);
+        matrice[p2Y][p2X] = ID_PLAQUE;
+
+        ajouterLabyrinthe(matrice, 1, milieuX - 1, 1, tailleH - 2);
+        ajouterLabyrinthe(matrice, milieuX + 1, tailleL - 2, 1, tailleH - 2);
+
+        // Test de solvabilité
+        if (estSolvable(matrice, {x:departX, y:departY}, {x:p1X, y:p1Y}, {x:p2X, y:p2Y}, {x:arriveX, y:arriveY}, milieuX)) {
+            break; 
+        }
+    }
+
+    if (attempts >= MAX_ATTEMPTS) console.warn("Attention: Niveau généré après trop de tentatives, solvabilité non garantie.");
 
     const level = {
         width: tailleL * TILE, height: tailleH * TILE,
@@ -176,7 +243,7 @@ function generateLevel(playerCount) {
         grid: new SpatialHashGrid(tailleL * TILE, tailleH * TILE, 80)
     };
 
-    const req1 = Math.max(1, Math.ceil(playerCount / 2)), req2 = Math.max(1, playerCount), coinGoal = Math.max(3, playerCount * 2);
+    const req1 = Math.max(1, Math.ceil(playerCount / 2)), req2 = Math.max(1, playerCount), coinGoal = Math.max(5, playerCount * 5);
     let plaqueId = 1, porteId = 1;
 
     for (let y = 0; y < tailleH; y++) {
@@ -318,6 +385,13 @@ function adjustDifficulty(level, newPlayerCount) {
     const q1 = level.quests.find(q => q.id === "btn1"), q2 = level.quests.find(q => q.id === "btn2");
     if (q1 && !q1.done) q1.text = `Activer la plaque Pont (${level.buttons.find(b => b.id === 1).reqCount} j.)`;
     if (q2 && !q2.done) q2.text = `Activer la plaque Verrou (${level.buttons.find(b => b.id === 2).reqCount} j.)`;
+    
+    // Mise à jour de l'objectif de pièces
+    const qCoins = level.quests.find(q => q.id === "coins");
+    if (qCoins && !qCoins.done) {
+        qCoins.total = Math.max(5, safeCount * 5);
+        qCoins.text = `Collecter ${qCoins.total} sphères (${qCoins.count}/${qCoins.total})`;
+    }
 }
 
 function assignerSpawnsJoueurs(level, players) {
