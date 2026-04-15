@@ -70,7 +70,7 @@ function normalizePseudo(rawPseudo, fallback) {
     return cleaned || fallback;
 }
 
-const TICK_RATE = 1000 / 1;// 60 FPS
+const TICK_RATE = 30;// 60 FPS
 
 io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
