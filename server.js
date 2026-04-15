@@ -287,6 +287,7 @@ socket.on('disconnect', () => {
             }
         }
     });
+    });
 
 // Physics & Game Loop
 setInterval(() => {
