@@ -667,7 +667,9 @@ document.addEventListener('pointerdown', unlockAudio, { passive: true });
 document.addEventListener('keydown', unlockAudio);
 
 // ── État global ───────────────────────────────────────────────────────
+// ── État global ───────────────────────────────────────────────────────
 let gameState = { players: {}, level: null, status: 'lobby' };
+let targetPlayers = {}; // Cibles de position envoyées par le serveur
 let lastLevelId = null;
 
 socket.emit('createGame', { pseudo: new URLSearchParams(window.location.search).get('pseudo') || 'Host' }, (r) => {
@@ -678,12 +680,18 @@ socket.on('stateUpdate', (newState) => {
     // Si le nouveau state a la géométrie, c'est un update complet (début de partie / join)
     if (newState.level && newState.level.geometrie) {
         gameState = newState;
+        // On initialise les cibles immédiatement pour éviter un saut au départ
+        for (const id in newState.players) {
+            targetPlayers[id] = { ...newState.players[id] };
+        }
     } else {
-        // Sinon c'est un tick dynamique (20ms), on fusionne les données changeantes
+        // Tick dynamique (20ms)
         gameState.status = newState.status;
         gameState.timeLeft = newState.timeLeft;
         gameState.countdown = newState.countdown;
-        gameState.players = newState.players;
+        
+        // On met à jour les cibles réseau
+        targetPlayers = newState.players;
         
         if (newState.level && gameState.level) {
             // On met à jour uniquement les propriétés dynamiques du niveau
@@ -782,14 +790,46 @@ function draw() {
 
     const status = gameState.status;
     const level = gameState.level;
-    const players = gameState.players;
 
     if (!level || status === 'lobby') {
         stopWalk(); requestAnimationFrame(draw); return;
     }
 
-    // (Plus besoin de buildMatrix – renderTilemap lit level.geometrie directement)
+    // --- INTERPOLATION DES JOUEURS (Lerp) ---
+    const LERP_FACTOR = 0.22; // Ajuster entre 0.1 et 0.3 pour plus ou moins de lissage
 
+    for (const id in targetPlayers) {
+        const target = targetPlayers[id];
+        
+        // Si le joueur n'est pas encore dans l'état de rendu, on le crée
+        if (!gameState.players[id]) {
+            gameState.players[id] = { ...target };
+            continue;
+        }
+
+        const current = gameState.players[id];
+        // Glissement fluide vers la cible
+        current.x += (target.x - current.x) * LERP_FACTOR;
+        current.y += (target.y - current.y) * LERP_FACTOR;
+
+        // Mise à jour instantanée des métadonnées (non-physiques)
+        current.vx = target.vx;
+        current.vy = target.vy;
+        current.hp = target.hp;
+        current.isDead = target.isDead;
+        current.invuln = target.invuln;
+        current.actionBlink = target.actionBlink;
+        current.color = target.color;
+        current.pseudo = target.pseudo;
+    }
+
+    // Nettoyage des joueurs déconnectés
+    for (const id in gameState.players) {
+        if (!targetPlayers[id]) delete gameState.players[id];
+    }
+
+    const players = gameState.players; // Référence locale pour la suite du rendu
+    
     updateCamera(level, players);
 
     const cx = Math.floor(canvas.width / 2);
