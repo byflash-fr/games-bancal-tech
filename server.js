@@ -284,7 +284,11 @@ io.on('connection', (socket) => {
         }
 
         const shapes = ['square', 'triangle', 'circle', 'cross', 'star'];
-        const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f1c40f', '#9b59b6'];
+        const colors = [
+            '#3498db', '#e74c3c', '#2ecc71', '#f1c40f', '#9b59b6', // Classiques
+            '#1abc9c', '#e67e22', '#e91e63', '#a2cf6e', '#3f51b5', // Vifs
+            '#00bcd4', '#ff80ab', '#4caf50', '#ff9800', '#795548'  // Variés
+        ];
         const pCount = Object.keys(game.players).length;
 
         let usedCombos = Object.values(game.players).map(p => p.shape + '_' + p.color);
