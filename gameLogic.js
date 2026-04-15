@@ -243,7 +243,7 @@ function generateLevel(playerCount) {
         grid: new SpatialHashGrid(tailleL * TILE, tailleH * TILE, 80)
     };
 
-    const req1 = Math.max(1, Math.ceil(playerCount / 2)), req2 = Math.max(1, playerCount), coinGoal = Math.max(5, playerCount * 5);
+    const req1 = Math.max(1, Math.ceil(playerCount / 2)), req2 = Math.max(1, playerCount);
     let plaqueId = 1, porteId = 1;
 
     for (let y = 0; y < tailleH; y++) {
@@ -253,11 +253,15 @@ function generateLevel(playerCount) {
             else if (cell === ID_PORTE) {
                 level.doors.push({ id: porteId++, x: cx, y: cy, w: TILE, h: TILE, linkedButton: (x === milieuX ? 1 : 2), open: false });
             } else if (cell === ID_PLAQUE) {
+                const currentId = plaqueId++;
                 level.buttons.push({
-                    id: plaqueId++, x: cx + TILE / 2, y: cy + TILE / 2, r: 30,
-                    reqCount: (plaqueId === 2 ? req1 : req2), color: (plaqueId === 2 ? '#3498db' : '#e74c3c'),
-                    pressed: false, currentCount: 0, sticky: (playerCount <= 1 || plaqueId === 2),
-                    label: (plaqueId === 2 ? 'PONT' : 'VERROU')
+                    id: currentId, x: cx + TILE / 2, y: cy + TILE / 2, r: 30,
+                    // ID 1 = Bleu/Pont/Moitié des joueurs, ID 2 = Rouge/Verrou/Tous les joueurs
+                    reqCount: (currentId === 1 ? req1 : req2), 
+                    color: (currentId === 1 ? '#3498db' : '#e74c3c'),
+                    pressed: false, currentCount: 0, 
+                    sticky: (playerCount <= 1 || currentId === 1),
+                    label: (currentId === 1 ? 'PONT' : 'VERROU')
                 });
             } else if (cell === ID_SORTIE) { level.exit.x = cx + TILE / 2; level.exit.y = cy + TILE / 2; }
             else if (cell === ID_SOL && !estCaseProtegee(matrice, x, y)) {
@@ -268,6 +272,7 @@ function generateLevel(playerCount) {
         }
     }
 
+    const coinGoal = level.coins.length;
     level.quests = [
         { id: "btn1", text: `Activer la plaque Pont (${req1} j.)`, done: false },
         { id: "btn2", text: `Activer la plaque Verrou (${req2} j.)`, done: false },
@@ -381,17 +386,39 @@ function checkWinCondition(players, level) {
 function adjustDifficulty(level, newPlayerCount) {
     if (!level) return;
     const safeCount = Math.max(1, newPlayerCount);
-    level.buttons.forEach(b => { if (b.reqCount > safeCount) b.reqCount = safeCount; });
+    
+    // On plafonne le requis des plaques au nombre actuel de joueurs (vivants ou total selon l'appel)
+    level.buttons.forEach(b => { 
+        if (b.sticky && b.reqCount > safeCount) b.reqCount = safeCount; 
+        if (!b.sticky && b.reqCount > safeCount) b.reqCount = safeCount;
+    });
+
     const q1 = level.quests.find(q => q.id === "btn1"), q2 = level.quests.find(q => q.id === "btn2");
     if (q1 && !q1.done) q1.text = `Activer la plaque Pont (${level.buttons.find(b => b.id === 1).reqCount} j.)`;
     if (q2 && !q2.done) q2.text = `Activer la plaque Verrou (${level.buttons.find(b => b.id === 2).reqCount} j.)`;
     
-    // Mise à jour de l'objectif de pièces
-    const qCoins = level.quests.find(q => q.id === "coins");
-    if (qCoins && !qCoins.done) {
-        qCoins.total = Math.max(5, safeCount * 5);
-        qCoins.text = `Collecter ${qCoins.total} sphères (${qCoins.count}/${qCoins.total})`;
+    // Mise à jour de l'objectif de pièces (on garde le total original, mais on pourrait le réduire ici si besoin)
+}
+
+/**
+ * Tente de réanimer un joueur à proximité.
+ * Coûte 1 HP au donneur pour donner 1 HP au receveur.
+ */
+function tryRevive(player, allPlayers) {
+    if (player.isDead || player.hp <= 1) return false;
+    
+    for (const id in allPlayers) {
+        const other = allPlayers[id];
+        if (other.isDead && getDistSq(player, other) < (TILE * 1.5) ** 2) {
+            // Transfert de vie
+            player.hp -= 1;
+            other.hp = 1;
+            other.isDead = false;
+            other.invuln = 120; // Protection après revive
+            return true;
+        }
     }
+    return false;
 }
 
 function assignerSpawnsJoueurs(level, players) {
@@ -418,4 +445,4 @@ function assignerSpawnsJoueurs(level, players) {
     });
 }
 
-module.exports = { generateLevel, applyPhysics, updateTriggers, checkWinCondition, adjustDifficulty, assignerSpawnsJoueurs };
+module.exports = { generateLevel, applyPhysics, updateTriggers, checkWinCondition, adjustDifficulty, assignerSpawnsJoueurs, tryRevive };

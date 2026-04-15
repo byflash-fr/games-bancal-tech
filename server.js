@@ -56,9 +56,9 @@ function normalizePseudo(rawPseudo, fallback) {
     return cleaned || fallback;
 }
 
-const TICK_RATE = 20; 
-const NETWORK_TICK_RATE = 50; 
-const FORCE_SYNC_RATE = 250; 
+const TICK_RATE = 20;
+const NETWORK_TICK_RATE = 50;
+const FORCE_SYNC_RATE = 250;
 
 function markGameDirty(gameCode) {
     const game = games[gameCode];
@@ -219,7 +219,7 @@ io.on('connection', (socket) => {
             players: {},
             joinUrl: joinUrl,
             qrCodeDataUrl: '',
-            level: gameLogic.generateLevel(2), 
+            level: gameLogic.generateLevel(2),
             netElapsed: 0,
             netForceElapsed: 0,
             netDirty: true
@@ -389,7 +389,10 @@ io.on('connection', (socket) => {
             } else if (data.type === 'action') {
                 if (data.button === 'B') {
                     player.actionBlink = 15;
-                    markGameDirty(code);
+                    // Tentation de réanimation
+                    if (gameLogic.tryRevive(player, games[code].players)) {
+                        markGameDirty(code);
+                    }
                 }
             }
         }
@@ -417,7 +420,8 @@ io.on('connection', (socket) => {
                                     io.to(code).emit('gameClosed', { reason: 'not-enough-players' });
                                     delete games[code];
                                 } else {
-                                    gameLogic.adjustDifficulty(games[code].level, currentPlayersCount);
+                                    const aliveCount = Object.values(games[code].players).filter(p => !p.isDead).length;
+                                    gameLogic.adjustDifficulty(games[code].level, Math.max(1, aliveCount));
                                     emitStateUpdate(code, { hostFull: true });
                                     markGameDirty(code);
                                 }
@@ -426,7 +430,7 @@ io.on('connection', (socket) => {
                                 markGameDirty(code);
                             }
                         }
-                    }, 10000); 
+                    }, 10000);
                 }
             }
         }
@@ -436,7 +440,7 @@ io.on('connection', (socket) => {
 // Boucle principale ultra optimisée
 setInterval(() => {
     // Calcul de deltaTime en Secondes, indispensable pour la mécanique des triggers de gameLogic.
-    const dt = TICK_RATE / 1000; 
+    const dt = TICK_RATE / 1000;
 
     for (const code in games) {
         const gameState = games[code];
@@ -444,16 +448,23 @@ setInterval(() => {
 
         for (const id in gameState.players) {
             const p = gameState.players[id];
-            
-            // Toujours passer dt pour décompter correctement l'invulnérabilité
+
+            const wasDead = p.isDead;
             const wasInvuln = p.invuln > 0;
             gameLogic.applyPhysics(p, gameState.level, dt);
-            
+
             if (p.vx !== 0 || p.vy !== 0 || (wasInvuln && p.invuln <= 0)) {
                 stateChanged = true;
             }
             if (p.actionBlink > 0) {
                 p.actionBlink--;
+                stateChanged = true;
+            }
+
+            // Si un joueur vient de mourir pendant ce tick, on ajuste la difficulté
+            if (!wasDead && p.isDead) {
+                const aliveCount = Object.values(gameState.players).filter(pl => !pl.isDead).length;
+                gameLogic.adjustDifficulty(gameState.level, aliveCount);
                 stateChanged = true;
             }
         }
