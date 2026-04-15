@@ -674,10 +674,25 @@ socket.emit('createGame', { pseudo: new URLSearchParams(window.location.search).
     if (r.success) console.log('Game created:', r.code);
 });
 
-socket.on('stateUpdate', (state) => {
-    gameState = state;
+socket.on('stateUpdate', (newState) => {
+    // Si le nouveau state a la géométrie, c'est un update complet (début de partie / join)
+    if (newState.level && newState.level.geometrie) {
+        gameState = newState;
+    } else {
+        // Sinon c'est un tick dynamique (20ms), on fusionne les données changeantes
+        gameState.status = newState.status;
+        gameState.timeLeft = newState.timeLeft;
+        gameState.countdown = newState.countdown;
+        gameState.players = newState.players;
+        
+        if (newState.level && gameState.level) {
+            // On met à jour uniquement les propriétés dynamiques du niveau
+            Object.assign(gameState.level, newState.level);
+        }
+    }
 
     // Lobby / Victory UI
+    const state = gameState; // Pour compatibilité avec la suite du code
     if (state.status === 'lobby') {
         if (lobbyUI) lobbyUI.style.display = 'flex';
         if (victoryUI) victoryUI.style.display = 'none';
@@ -692,8 +707,6 @@ socket.on('stateUpdate', (state) => {
                 let imgHtml = `<span style="display:inline-block;width:24px;height:24px;background:${p.color};border-radius:50%;margin-right:15px;border:2px solid white;"></span>`;
 
                 if (coloredBille) {
-                    // Pour le lobby on va créer des petits canvas dynamiquement ou juste utiliser le fallback couleur si trop complexe
-                    // Ici on va injecter un canvas id pour le remplir après
                     imgHtml = `<canvas id="bille-icon-${id}" width="40" height="40" style="width:30px;height:30px;margin-right:15px;image-rendering:pixelated;"></canvas>`;
                 }
 

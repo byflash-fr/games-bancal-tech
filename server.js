@@ -346,7 +346,28 @@ setInterval(() => {
             }
         }
 
-        io.to(code).emit('stateUpdate', gameState);
+        // Optimisation : On n'envoie que les données dynamiques au tick
+        const dynamicLevel = gameState.level ? {
+            buttons: gameState.level.buttons,
+            doors: gameState.level.doors,
+            coins: gameState.level.coins,
+            hearts: gameState.level.hearts,
+            traps: gameState.level.traps,
+            exit: gameState.level.exit,
+            quests: gameState.level.quests,
+            sequenceIndex: gameState.level.sequenceIndex,
+            sequenceButtons: gameState.level.sequenceButtons
+        } : null;
+
+        const dynamicState = {
+            status: gameState.status,
+            timeLeft: gameState.timeLeft,
+            countdown: gameState.countdown,
+            players: gameState.players,
+            level: dynamicLevel
+        };
+
+        io.to(code).emit('stateUpdate', dynamicState);
     }
 }, TICK_RATE);
 

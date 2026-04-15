@@ -518,8 +518,6 @@ function assignerSpawnsJoueurs(level, players) {
             player.x = level.spawnX;
             player.y = level.spawnY;
         }
-        player.vx = 0;
-        player.vy = 0;
         player.isDead = false;
         player.hp = BASE_HP;
         player.invuln = 0;
