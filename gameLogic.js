@@ -280,26 +280,6 @@ function generateLevel(playerCount) {
         { id: "exit", text: "Tous rejoindre la SORTIE", done: false }
     ];
 
-    // --- Mécaniques additionnelles (Code Secret) ---
-    const colors = ['#e74c3c', '#2ecc71', '#3498db', '#f1c40f', '#9b59b6'];
-    level.secretCode = [];
-    for (let i = 0; i < 3; i++) level.secretCode.push(colors[tirerNombreAleatoire(0, colors.length - 1)]);
-    level.sequenceIndex = 0;
-
-    // Indice placé près du spawn
-    level.floorClues = [{ x: level.spawnX + 40, y: level.spawnY + 80, colors: level.secretCode }];
-
-    // Boutons de séquence dans la zone de la sortie
-    level.sequenceButtons = [];
-    const seqX = level.exit.x - (colors.length * 30);
-    const seqY = level.exit.y - 100;
-    for (let i = 0; i < colors.length; i++) {
-        level.sequenceButtons.push({
-            id: `seq_${i}`, x: seqX + i * 60, y: seqY, r: 20,
-            color: colors[i], isPressed: false, cooldown: 0
-        });
-    }
-    level.quests.push({ id: "code", text: "Décoder le secret couleur", done: false });
 
     return level;
 }
@@ -420,27 +400,6 @@ function updateTriggers(players, level) {
         qCoins.done = collectedCoins >= tot;
     }
 
-    let codeDone = true;
-    if (level.sequenceIndex < level.secretCode.length) {
-        codeDone = false;
-        for (let sb of level.sequenceButtons) {
-            if (sb.cooldown > 0) sb.cooldown--;
-            for (let p of pList) {
-                if (p.isDead) continue;
-                const dx = p.x - sb.x, dy = p.y - sb.y;
-                if (dx * dx + dy * dy < (sb.r + PLAYER_R) * (sb.r + PLAYER_R) && sb.cooldown <= 0) {
-                    sb.cooldown = 60;
-                    if (sb.color === level.secretCode[level.sequenceIndex]) {
-                        level.sequenceIndex++;
-                    } else {
-                        level.sequenceIndex = 0;
-                    }
-                }
-            }
-        }
-    }
-    const qCode = level.quests.find(q => q.id === "code");
-    if (qCode) qCode.done = codeDone;
 
     if (level.traps) {
         for (let p of pList) {

@@ -493,57 +493,6 @@ function drawTrap(t) {
     }
 }
 
-// ── Reliques ─────────────────────────────────────────────────────────
-function drawRelic(rel) {
-    ctx.save();
-    ctx.translate(rel.x, rel.y);
-    ctx.rotate(Date.now() / 500);
-    ctx.fillStyle = '#9b59b6';
-    ctx.shadowColor = '#9b59b6'; ctx.shadowBlur = 15;
-    ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(17, 10); ctx.lineTo(-17, 10); ctx.closePath();
-    ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
-    ctx.restore();
-}
-
-// ── Indices au sol ───────────────────────────────────────────────────
-function drawFloorClues(clues, level) {
-    if (!clues) return;
-    for (const clue of clues) {
-        ctx.save();
-        ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.font = 'bold 22px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('🔑 CODE', clue.x + clue.colors.length * 25, clue.y - 14);
-        for (let i = 0; i < clue.colors.length; i++) {
-            ctx.fillStyle = clue.colors[i];
-            ctx.shadowColor = clue.colors[i]; ctx.shadowBlur = 10;
-            ctx.beginPath(); ctx.arc(clue.x + i * 54, clue.y + 20, 20, 0, Math.PI * 2); ctx.fill();
-            // Numéro
-            if (level && level.sequenceIndex !== undefined) {
-                ctx.fillStyle = i < level.sequenceIndex ? '#2ecc71' : '#fff';
-                ctx.shadowBlur = 0; ctx.font = 'bold 16px Arial';
-                ctx.fillText(i + 1, clue.x + i * 54, clue.y + 26);
-            }
-        }
-        ctx.restore();
-    }
-}
-
-// ── Boutons de séquence ───────────────────────────────────────────────
-function drawSequenceButtons(sbs, seqIdx) {
-    if (!sbs) return;
-    for (const sb of sbs) {
-        ctx.beginPath(); ctx.arc(sb.x, sb.y, sb.r, 0, Math.PI * 2);
-        ctx.fillStyle = sb.cooldown > 0 ? '#444' : sb.color;
-        if (sb.cooldown <= 0) { ctx.shadowColor = sb.color; ctx.shadowBlur = 12; }
-        ctx.fill(); ctx.shadowBlur = 0;
-        ctx.strokeStyle = sb.cooldown > 0 ? '#888' : '#fff'; ctx.lineWidth = 3; ctx.stroke();
-    }
-    if (seqIdx !== undefined && sbs.length > 0) {
-        ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = 'bold 15px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(`Séquence : ${seqIdx}/3`, sbs[0].x + sbs.length * 30, sbs[0].y - 36);
-    }
-}
 
 // ── Portes dessinées par-dessus le fog ────────────────────────────────
 function drawDoors(doors, buttons) {
@@ -809,17 +758,6 @@ function draw() {
     renderTilemap(level, 'sol');
     renderTilemap(level, 'murs');
 
-    // 2. Labels de salles
-    if (level.rooms) {
-        const roomLabels = { A: '🏠 SPAWN', B: '🔵 TAMPON', C: '🟠 VERROU', D: '🚪 SORTIE' };
-        const roomColors = { A: 'rgba(46,204,113,0.12)', B: 'rgba(52,152,219,0.12)', C: 'rgba(230,126,34,0.12)', D: 'rgba(231,76,60,0.12)' };
-        ctx.font = 'bold 26px Arial'; ctx.textAlign = 'center';
-        for (const [k, r] of Object.entries(level.rooms)) {
-            ctx.fillStyle = roomColors[k]; ctx.fillRect(r.x, r.y, r.w, r.h);
-            ctx.fillStyle = roomColors[k].replace('0.12', '0.45');
-            ctx.fillText(roomLabels[k], r.x + r.w / 2, r.y + 52);
-        }
-    }
 
     // 3. Sortie
     drawExit(level.exit);
@@ -836,14 +774,6 @@ function draw() {
     // 6. Pièges
     if (level.traps) for (const t of level.traps) drawTrap(t);
 
-    // 7. Reliques
-    if (level.relics) for (const r of level.relics) if (!r.collected) drawRelic(r);
-
-    // 8. Indices au sol
-    drawFloorClues(level.floorClues, level);
-
-    // 9. Boutons de séquence
-    drawSequenceButtons(level.sequenceButtons, level.sequenceIndex);
 
     // 10. Joueurs
     for (const id of pIds) drawPlayer(players[id]);
