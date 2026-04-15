@@ -415,7 +415,7 @@ function tryRevive(player, allPlayers) {
             player.hp -= 1;
             other.hp = 1;
             other.isDead = false;
-            other.invuln = 120; // Protection après revive
+            other.invuln = 300; // Protection après revive (5 secondes)
             return true;
         }
     }
