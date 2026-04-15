@@ -191,7 +191,7 @@ function draw() {
         if (gameState.level.sequenceIndex !== undefined) {
             ctx.fillStyle = '#fff';
             ctx.font = 'bold 16px Arial';
-            ctx.fillText(`Progression: ${gameState.level.sequenceIndex}/3`, gameState.level.sequenceButtons[0].x, gameState.level.sequenceButtons[0].y - 30);
+            ctx.fillText(\`Progression: \${gameState.level.sequenceIndex}/3\`, gameState.level.sequenceButtons[0].x, gameState.level.sequenceButtons[0].y - 30);
         }
     }
 
