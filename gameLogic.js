@@ -20,12 +20,12 @@ const PROTECTED_IDS = new Set([2, 3, 4, 8]);
 function estCaseProtegee(matrice, x, y) {
     const ID_SOL = 1;
     const ID_MUR_EXTERIEUR = 6;
-    
+
     if (matrice[y][x] !== ID_SOL) return true;
 
     const voisins = [
-        {dx: 0, dy: -1}, {dx: 0, dy: 1}, 
-        {dx: -1, dy: 0}, {dx: 1, dy: 0}
+        { dx: 0, dy: -1 }, { dx: 0, dy: 1 },
+        { dx: -1, dy: 0 }, { dx: 1, dy: 0 }
     ];
 
     for (let v of voisins) {
@@ -50,7 +50,7 @@ function ajouterLabyrinthe(matrice, minX, maxX, minY, maxY) {
                 if (!estCaseProtegee(matrice, x, y)) {
                     if (Math.random() > 0.3) {
                         matrice[y][x] = ID_MUR;
-                        const directions = [{dx:1, dy:0}, {dx:0, dy:1}];
+                        const directions = [{ dx: 1, dy: 0 }, { dx: 0, dy: 1 }];
                         let dir = directions[tirerNombreAleatoire(0, 1)];
                         let ex = x + dir.dx;
                         let ey = y + dir.dy;
@@ -68,7 +68,7 @@ function construireSalleSortie(matrice, cx, cy) {
     const ID_MUR = 6;
     const ID_SOL = 1;
     const ID_SORTIE = 4;
-    const ID_PORTE = 2; 
+    const ID_PORTE = 2;
 
     for (let dy = -2; dy <= 2; dy++) {
         for (let dx = -2; dx <= 2; dx++) {
@@ -76,9 +76,9 @@ function construireSalleSortie(matrice, cx, cy) {
             let targetY = cy + dy;
             if (targetY >= 0 && targetY < matrice.length && targetX >= 0 && targetX < matrice[0].length) {
                 if (Math.abs(dx) === 2 || Math.abs(dy) === 2) {
-                    matrice[targetY][targetX] = ID_MUR; 
+                    matrice[targetY][targetX] = ID_MUR;
                 } else {
-                    matrice[targetY][targetX] = ID_SOL; 
+                    matrice[targetY][targetX] = ID_SOL;
                 }
             }
         }
@@ -90,8 +90,8 @@ function construireSalleSortie(matrice, cx, cy) {
 
     switch (choix) {
         case "haut":
-            matrice[cy - 2][cx] = ID_PORTE; 
-            matrice[cy - 1][cx] = ID_SOL;   
+            matrice[cy - 2][cx] = ID_PORTE;
+            matrice[cy - 1][cx] = ID_SOL;
             break;
         case "bas":
             matrice[cy + 2][cx] = ID_PORTE;
@@ -144,7 +144,7 @@ function generateLevel(playerCount) {
     for (let y = 1; y < tailleH - 1; y++) {
         matrice[y][milieuX] = ID_MUR;
     }
-    
+
     // Porte de séparation (Plate 1 débloque celle-ci)
     const porteSeparationY = tirerNombreAleatoire(2, tailleH - 3);
     matrice[porteSeparationY][milieuX] = ID_PORTE;
@@ -230,22 +230,22 @@ function generateLevel(playerCount) {
                     break;
                 case ID_PLAQUE:
                     level.buttons.push({
-                        id: plaqueId, x: cx + TILE/2, y: cy + TILE/2, r: 30,
+                        id: plaqueId, x: cx + TILE / 2, y: cy + TILE / 2, r: 30,
                         reqCount: (plaqueId === 1 ? reqCount1 : reqCount2),
                         color: (plaqueId === 1 ? '#3498db' : '#e74c3c'),
-                        pressed: false, currentCount: 0, 
+                        pressed: false, currentCount: 0,
                         sticky: (playerCount <= 1 || plaqueId === 1),
                         label: (plaqueId === 1 ? 'PONT' : 'VERROU')
                     });
                     plaqueId++;
                     break;
                 case ID_SORTIE:
-                    level.exit.x = cx + TILE/2;
-                    level.exit.y = cy + TILE/2;
+                    level.exit.x = cx + TILE / 2;
+                    level.exit.y = cy + TILE / 2;
                     break;
                 case ID_PIEGE:
                     // On ajoutera plus de pièges aléatoires après
-                    level.traps.push({ x: cx + TILE/2, y: cy + TILE/2, active: true });
+                    level.traps.push({ x: cx + TILE / 2, y: cy + TILE / 2, active: true });
                     break;
             }
         }
@@ -274,9 +274,9 @@ function generateLevel(playerCount) {
     // --- Mécaniques additionnelles (Code Secret) ---
     const colors = ['#e74c3c', '#2ecc71', '#3498db', '#f1c40f', '#9b59b6'];
     level.secretCode = [];
-    for(let i=0; i<3; i++) level.secretCode.push(colors[tirerNombreAleatoire(0, colors.length - 1)]);
+    for (let i = 0; i < 3; i++) level.secretCode.push(colors[tirerNombreAleatoire(0, colors.length - 1)]);
     level.sequenceIndex = 0;
-    
+
     // Indice placé près du spawn
     level.floorClues = [{ x: level.spawnX + 40, y: level.spawnY + 80, colors: level.secretCode }];
 
@@ -284,9 +284,9 @@ function generateLevel(playerCount) {
     level.sequenceButtons = [];
     const seqX = level.exit.x - (colors.length * 30);
     const seqY = level.exit.y - 100;
-    for(let i=0; i<colors.length; i++) {
+    for (let i = 0; i < colors.length; i++) {
         level.sequenceButtons.push({
-            id: `seq_${i}`, x: seqX + i*60, y: seqY, r: 20,
+            id: `seq_${i}`, x: seqX + i * 60, y: seqY, r: 20,
             color: colors[i], isPressed: false, cooldown: 0
         });
     }
@@ -302,7 +302,7 @@ function checkWallCollision(p, level) {
 
     // Rayon de détection (un peu plus large pour éviter les glitches)
     const margin = pr - 2;
-    
+
     // Bounds in grid coordinates
     const minC = Math.floor((p.x - margin) / TILE);
     const maxC = Math.floor((p.x + margin) / TILE);
@@ -334,7 +334,7 @@ function checkWallCollision(p, level) {
 function applyPhysics(player, level) {
     if (player.isDead) return;
     if (player.invuln > 0) player.invuln--;
-    const SPEED = 5;
+    const SPEED = 2;
     let newX = player.x + player.vx * SPEED;
     const oldX = player.x;
     player.x = newX;
@@ -456,23 +456,23 @@ function adjustDifficulty(level, newPlayerCount) {
         if (b.reqCount > safeCount) b.reqCount = safeCount;
     }
     const qBtn1 = level.quests.find(q => q.id === "btn1");
-    if (qBtn1 && !qBtn1.done) qBtn1.text = `Activer la plaque Pont (${level.buttons.find(b=>b.id===1).reqCount} j.)`;
+    if (qBtn1 && !qBtn1.done) qBtn1.text = `Activer la plaque Pont (${level.buttons.find(b => b.id === 1).reqCount} j.)`;
     const qBtn2 = level.quests.find(q => q.id === "btn2");
-    if (qBtn2 && !qBtn2.done) qBtn2.text = `Activer la plaque Verrou (${level.buttons.find(b=>b.id===2).reqCount} j.)`;
+    if (qBtn2 && !qBtn2.done) qBtn2.text = `Activer la plaque Verrou (${level.buttons.find(b => b.id === 2).reqCount} j.)`;
 }
 
 function assignerSpawnsJoueurs(level, players) {
     const pIds = Object.keys(players);
     const matrice = level.geometrie;
     if (!matrice) return;
-    
+
     let startC = Math.floor(level.spawnX / TILE);
     let startR = Math.floor(level.spawnY / TILE);
-    
+
     let casesLibres = [];
     const ID_SOL = 1;
     const ID_DEPART = 3;
-    
+
     for (let r = startR - 2; r <= startR + 2; r++) {
         for (let c = startC - 2; c <= startC + 2; c++) {
             if (r >= 0 && r < matrice.length && c >= 0 && c < matrice[0].length) {
@@ -482,9 +482,9 @@ function assignerSpawnsJoueurs(level, players) {
             }
         }
     }
-    
+
     casesLibres.sort(() => Math.random() - 0.5);
-    
+
     pIds.forEach((id, index) => {
         const player = players[id];
         if (index < casesLibres.length) {
@@ -503,4 +503,4 @@ function assignerSpawnsJoueurs(level, players) {
     });
 }
 
-module.exports = { generateLevel, applyPhysics, updateTriggers, checkWinCondition, adjustDifficulty, assignerSpawnsJoueurs };
+module.exports = { generateLevel, applyPhysics, updateTriggers, checkWinCondition, adjustDifficulty, assignerSpawnsJoueurs };
