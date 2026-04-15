@@ -243,7 +243,7 @@ function generateLevel(playerCount) {
         grid: new SpatialHashGrid(tailleL * TILE, tailleH * TILE, 80)
     };
 
-    const req1 = Math.max(1, Math.ceil(playerCount / 2)), req2 = Math.max(1, playerCount), coinGoal = Math.max(3, playerCount * 2);
+    const req1 = Math.max(1, Math.ceil(playerCount / 2)), req2 = Math.max(1, playerCount), coinGoal = Math.max(5, playerCount * 5);
     let plaqueId = 1, porteId = 1;
 
     for (let y = 0; y < tailleH; y++) {
@@ -385,6 +385,13 @@ function adjustDifficulty(level, newPlayerCount) {
     const q1 = level.quests.find(q => q.id === "btn1"), q2 = level.quests.find(q => q.id === "btn2");
     if (q1 && !q1.done) q1.text = `Activer la plaque Pont (${level.buttons.find(b => b.id === 1).reqCount} j.)`;
     if (q2 && !q2.done) q2.text = `Activer la plaque Verrou (${level.buttons.find(b => b.id === 2).reqCount} j.)`;
+    
+    // Mise à jour de l'objectif de pièces
+    const qCoins = level.quests.find(q => q.id === "coins");
+    if (qCoins && !qCoins.done) {
+        qCoins.total = Math.max(5, safeCount * 5);
+        qCoins.text = `Collecter ${qCoins.total} sphères (${qCoins.count}/${qCoins.total})`;
+    }
 }
 
 function assignerSpawnsJoueurs(level, players) {
