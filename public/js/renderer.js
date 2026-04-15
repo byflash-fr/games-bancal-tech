@@ -1,587 +1,739 @@
+// ═══════════════════════════════════════════════════════════════════
+//  renderer.js – Bancal  |  Système Tilemap + Textures
+//  Taille de tuile : 40px (même que le jeu source)
+//  Images :
+//    feuille.png  → tileset autotile (bitmask 4 voisins, 16 frames)
+//    herbe.png    → sol uni (1 frame)
+//    piece.png    → sprite animé 10 frames (400×40)
+//    pikkux.png   → sprite animé 4 frames (160×40) → piège horizontal
+//    pikkuy.png   → sprite animé 4 frames (160×40) → piège vertical
+//    sortie.png   → sprite animé 9 frames (360×40)
+// ═══════════════════════════════════════════════════════════════════
+
 const socket = io();
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
 
-canvas.width = window.innerWidth;
+canvas.width  = window.innerWidth;
 canvas.height = window.innerHeight;
-
 window.addEventListener('resize', () => {
-    canvas.width = window.innerWidth;
+    canvas.width  = window.innerWidth;
     canvas.height = window.innerHeight;
 });
 
-const urlParams = new URLSearchParams(window.location.search);
-const pseudo = urlParams.get('pseudo') || 'Host';
+// ── Paramètres ───────────────────────────────────────────────────────
+const TILE = 40; // taille d'une tuile en pixels monde
 
-let gameState = { players: {}, level: null, status: 'lobby' }; // Ajout du statut par défaut
-
-socket.emit('createGame', { pseudo }, (response) => {
-    if(response.success) {
-        console.log("Game created:", response.code);
-    }
-});
-
-const lobbyUI = document.getElementById('lobby-ui');
-const pCountSpan = document.getElementById('player-count');
-const joinUrlText = document.getElementById('join-url-text');
-const qrCodeImg = document.getElementById('qr-code-img');
-const gameCodeDisplay = document.getElementById('game-code-display');
-const playersList = document.getElementById('players-list');
-const victoryUI = document.getElementById('victory-ui');
-
-// --- Sons ---
-const backgroundMusic = new Audio('/assets/son/music.mp3');
-backgroundMusic.loop = true;
-backgroundMusic.preload = 'auto';
-backgroundMusic.volume = 0.35;
-
-const walkingSound = new Audio('/assets/son/marche.mp3');
-walkingSound.loop = true;
-walkingSound.preload = 'auto';
-walkingSound.volume = 0.4;
-
-// --- Chargement des Textures (Système dynamique) ---
-const textures = {
-    herbe: new Image(),
-    feuille: new Image(),
-    piece: new Image(),
-    pikkux: new Image(),
-    pikkuy: new Image(),
-    sortie: new Image()
+// IDs de tuile
+const T = {
+    HERBE : 1, // sol traversable
+    MUR   : 2, // mur (autotile feuille.png)
+    SPAWN : 3, // point de spawn (sol visible)
+    PIEGE : 5, // piège (dessous = herbe, dessus = sprite animé)
 };
 
-// On s'assure d'utiliser les bonnes extensions trouvées dans ton dossier
-textures.herbe.src = '/assets/images/herbe.png';
-textures.feuille.src = '/assets/images/feuille.png'; 
-textures.piece.src = '/assets/images/piece.png';
-textures.pikkux.src = '/assets/images/pikkux.png';
-textures.pikkuy.src = '/assets/images/pikkuy.png';
-textures.sortie.src = '/assets/images/sortie.png';
-
-// --- Utilitaires de rendu 2D (Extrait de la logique Tilemap) ---
-
-function drawWorldTiled(ctx, img, x, y, w, h, tileSize) {
-    if (!img.complete || img.width === 0) return false;
-    
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(x, y, w, h);
-    ctx.clip(); 
-    
-    let startX = Math.floor(x / tileSize) * tileSize;
-    let startY = Math.floor(y / tileSize) * tileSize;
-    
-    for (let i = startX; i < x + w; i += tileSize) {
-        for (let j = startY; j < y + h; j += tileSize) {
-            ctx.drawImage(img, i, j, tileSize, tileSize);
-        }
-    }
-    ctx.restore();
-    return true;
+// ── Ressources ───────────────────────────────────────────────────────
+const RES = {};
+function loadImg(key, src) {
+    RES[key] = new Image();
+    RES[key].src = src;
 }
+loadImg('herbe',   '/assets/images/herbe.png');
+loadImg('feuille', '/assets/images/feuille.png');
+loadImg('piece',   '/assets/images/piece.png');
+loadImg('pikkux',  '/assets/images/pikkux.png');
+loadImg('pikkuy',  '/assets/images/pikkuy.png');
+loadImg('sortie',  '/assets/images/sortie.png');
 
-function drawAnimatedCenter(ctx, img, cx, cy, drawSize, speedMs) {
-    if (!img.complete || img.width === 0) return false;
-    let frames = Math.max(1, Math.floor(img.width / img.height));
-    let frameIndex = Math.floor(Date.now() / speedMs) % frames;
-    let frameW = img.width / frames;
-    let frameH = img.height;
-    
-    ctx.drawImage(img, frameIndex * frameW, 0, frameW, frameH, cx - drawSize/2, cy - drawSize/2, drawSize, drawSize);
-    return true;
-}
-
-function drawTrapTexture(ctx, img, x, y, w, h, isHorizontal) {
-    if (!img.complete || img.width === 0) return false;
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(x, y, w, h);
-    ctx.clip();
-    
-    let frames = Math.max(1, Math.floor(img.width / img.height));
-    let frameIndex = Math.floor(Date.now() / 150) % frames;
-    let frameW = img.width / frames;
-    let frameH = img.height;
-    
-    if (isHorizontal) {
-        let size = h; 
-        for (let i = 0; i < w; i += size) {
-            ctx.drawImage(img, frameIndex * frameW, 0, frameW, frameH, x + i, y, size, size);
-        }
-    } else {
-        let size = w; 
-        for (let j = 0; j < h; j += size) {
-            ctx.drawImage(img, frameIndex * frameW, 0, frameW, frameH, x, y + j, size, size);
-        }
-    }
-    ctx.restore();
-    return true;
-}
-
-// --- Fonctions Audio ---
-function tryPlayBackgroundMusic() {
-    if (!backgroundMusic.paused) return;
-    backgroundMusic.play().catch(() => {});
-}
-
-function tryPlayWalkingSound() {
-    if (!walkingSound.paused) return;
-    walkingSound.play().catch(() => {});
-}
-
-function stopWalkingSound() {
-    if (walkingSound.paused) return;
-    walkingSound.pause();
-    walkingSound.currentTime = 0;
-}
-
-const unlockMusicOnFirstInteraction = () => {
-    tryPlayBackgroundMusic();
-    const isAnyPlayerMoving = Object.values(gameState.players || {}).some((player) => player.vx !== 0 || player.vy !== 0);
-    if (isAnyPlayerMoving) {
-        tryPlayWalkingSound();
-    }
-    document.removeEventListener('pointerdown', unlockMusicOnFirstInteraction);
-    document.removeEventListener('keydown', unlockMusicOnFirstInteraction);
-    document.removeEventListener('touchstart', unlockMusicOnFirstInteraction);
+// Sprites animés : { img, frames, speed(ms/frame) }
+const ANIM = {
+    piece  : { key:'piece',  frames:10, speed:100 },
+    pikkux : { key:'pikkux', frames:4,  speed:120 },
+    pikkuy : { key:'pikkuy', frames:4,  speed:120 },
+    sortie : { key:'sortie', frames:9,  speed:150 },
 };
 
-tryPlayBackgroundMusic();
-document.addEventListener('pointerdown', unlockMusicOnFirstInteraction, { passive: true });
-document.addEventListener('keydown', unlockMusicOnFirstInteraction);
-document.addEventListener('touchstart', unlockMusicOnFirstInteraction, { passive: true });
+function drawSprite(anim, cx, cy, size) {
+    const img = RES[anim.key];
+    if (!img.complete || !img.naturalWidth) return false;
+    const fi = Math.floor(Date.now() / anim.speed) % anim.frames;
+    const fw = img.naturalWidth / anim.frames;
+    ctx.drawImage(img, fi*fw, 0, fw, img.naturalHeight,
+                  cx - size/2, cy - size/2, size, size);
+    return true;
+}
 
+// ── Génération de la matrice tilemap depuis le level ─────────────────
+// La matrice est recalculée à chaque nouveau niveau (levelId).
+let tileMatrix = null;   // tileMatrix[row][col] = T.xxx
+let tileAppearance = null; // pour le bitmask mur autotile
+let matrixW = 0, matrixH = 0;
+let currentLevelId = null;
 
-// ── GESTION DES ÉTATS (Mise à jour de l'UI LOBBY) ────────────────────────
-socket.on('stateUpdate', (state) => {
-    gameState = state;
-    
-    if (state.status === 'lobby' || state.status === 'defeat') {
-        if (lobbyUI) lobbyUI.style.display = 'flex';
-        if (victoryUI) victoryUI.style.display = 'none';
-        if (pCountSpan) pCountSpan.innerText = Object.keys(state.players).length;
+function buildMatrix(level) {
+    const cols = Math.ceil(level.width  / TILE);
+    const rows = Math.ceil(level.height / TILE);
+    matrixW = cols; matrixH = rows;
 
-        if (gameCodeDisplay) gameCodeDisplay.innerText = state.code;
-        
-        if (playersList) {
-            playersList.innerHTML = '';
-            for(let id in state.players) {
-                let p = state.players[id];
-                playersList.innerHTML += `<li style="margin-bottom: 10px; display: flex; align-items: center;"><span style="display:inline-block; width:20px; height:20px; background:${p.color}; border-radius:50%; margin-right:15px; border:2px solid white;"></span>${p.pseudo}</li>`;
+    // 1. Tout en herbe
+    const mat = Array.from({length: rows}, () => new Array(cols).fill(T.HERBE));
+
+    // 2. Murs solides → T.MUR
+    for (const w of level.walls) {
+        const c0 = Math.floor(w.x / TILE);
+        const r0 = Math.floor(w.y / TILE);
+        const c1 = Math.ceil((w.x + w.w) / TILE);
+        const r1 = Math.ceil((w.y + w.h) / TILE);
+        for (let r = r0; r < r1; r++)
+            for (let c = c0; c < c1; c++)
+                if (r >= 0 && r < rows && c >= 0 && c < cols)
+                    mat[r][c] = T.MUR;
+    }
+
+    // 3. Portes fermées → T.MUR (recalculé dynamiquement, voir renderDoors)
+    // On ne les intègre pas dans la matrice statique
+
+    // 4. Spawn
+    const sc = Math.floor(level.spawnX / TILE);
+    const sr = Math.floor(level.spawnY / TILE);
+    if (sr >= 0 && sr < rows && sc >= 0 && sc < cols) mat[sr][sc] = T.SPAWN;
+
+    tileMatrix = mat;
+    computeAutotile();
+}
+
+// Calcule le bitmask autotile pour chaque tuile MUR (même algo que le jeu source)
+// Voisins : haut=1, gauche=2, droite=4, bas=8
+function computeAutotile() {
+    tileAppearance = Array.from({length: matrixH}, () => new Array(matrixW).fill(0));
+    const isWall = (r,c) => r>=0 && r<matrixH && c>=0 && c<matrixW && tileMatrix[r][c] === T.MUR;
+    for (let r = 0; r < matrixH; r++) {
+        for (let c = 0; c < matrixW; c++) {
+            if (tileMatrix[r][c] !== T.MUR) continue;
+            let v = [0,0,0,0]; // haut gauche droite bas
+            if (isWall(r-1,c)) v[0]=1;
+            if (isWall(r,c-1)) v[1]=1;
+            if (isWall(r,c+1)) v[2]=1;
+            if (isWall(r+1,c)) v[3]=1;
+            tileAppearance[r][c] = 1*v[0] + 2*v[1] + 4*v[2] + 8*v[3];
+        }
+    }
+}
+
+// ── Rendu de la tilemap ───────────────────────────────────────────────
+function renderTilemap(doors) {
+    if (!tileMatrix) return;
+
+    // Ensemble des portes fermées (cases bloquées dynamiquement)
+    const doorSet = new Set();
+    for (const d of doors) {
+        if (!d.open) {
+            const c0 = Math.floor(d.x / TILE), r0 = Math.floor(d.y / TILE);
+            const c1 = Math.ceil((d.x+d.w)/TILE), r1 = Math.ceil((d.y+d.h)/TILE);
+            for (let r=r0;r<r1;r++) for (let c=c0;c<c1;c++) doorSet.add(`${r},${c}`);
+        }
+    }
+
+    const feuilleImg = RES['feuille'];
+    const herbeImg   = RES['herbe'];
+    const feuilleOk  = feuilleImg.complete && feuilleImg.naturalWidth > 0;
+    const herbeOk    = herbeImg.complete   && herbeImg.naturalWidth  > 0;
+
+    for (let r = 0; r < matrixH; r++) {
+        for (let c = 0; c < matrixW; c++) {
+            const px = c * TILE, py = r * TILE;
+            const id = tileMatrix[r][c];
+            const isDoor = doorSet.has(`${r},${c}`);
+            const isWallTile = id === T.MUR || isDoor;
+
+            if (isWallTile) {
+                // Autotile feuille.png : chaque variation est à x=bitmask*TILE, y=ligne*TILE
+                // Ligne 1 = murs (y = 1*TILE = 40)
+                const bitmask = isDoor ? 0 : (tileAppearance[r][c] || 0);
+                const srcX = bitmask * TILE;
+                const srcY = 1 * TILE; // ligne des murs
+
+                if (feuilleOk && feuilleImg.naturalWidth > srcX + TILE && feuilleImg.naturalHeight > srcY + TILE) {
+                    ctx.drawImage(feuilleImg, srcX, srcY, TILE, TILE, px, py, TILE, TILE);
+                } else {
+                    // Fallback couleur
+                    ctx.fillStyle = isDoor ? '#7f3030' : '#2a2a3a';
+                    ctx.fillRect(px, py, TILE, TILE);
+                    ctx.strokeStyle = '#00ffcc';
+                    ctx.lineWidth = 0.5;
+                    ctx.strokeRect(px, py, TILE, TILE);
+                }
+            } else {
+                // Sol herbe
+                if (herbeOk) {
+                    ctx.drawImage(herbeImg, 0, 0, herbeImg.naturalWidth, herbeImg.naturalHeight,
+                                  px, py, TILE, TILE);
+                } else {
+                    ctx.fillStyle = id === T.SPAWN ? '#1e3a2e' : '#1a2a1e';
+                    ctx.fillRect(px, py, TILE, TILE);
+                }
             }
         }
-        
-        if (state.qrCodeDataUrl && qrCodeImg.src !== state.qrCodeDataUrl) {
-            joinUrlText.innerText = state.joinUrl;
-            qrCodeImg.src = state.qrCodeDataUrl;
-            qrCodeImg.style.display = 'block';
-        }
-    } else if (state.status === 'victory') {
-        if (lobbyUI) lobbyUI.style.display = 'none';
-        if (victoryUI) victoryUI.style.display = 'flex';
-    } else {
-        // En jeu, ou démarrage
-        if (lobbyUI) lobbyUI.style.display = 'none';
-        if (victoryUI) victoryUI.style.display = 'none';
     }
-});
+}
 
+// ── Fog of War ───────────────────────────────────────────────────────
+const fogCanvas = document.createElement('canvas');
+const fogCtx    = fogCanvas.getContext('2d', {willReadFrequently: true});
 
-function getIntersection(ray, segment) {
-    const r_px = ray.a.x, r_py = ray.a.y;
-    const r_dx = ray.b.x - ray.a.x, r_dy = ray.b.y - ray.a.y;
-    const s_px = segment.a.x, s_py = segment.a.y;
-    const s_dx = segment.b.x - segment.a.x, s_dy = segment.b.y - segment.a.y;
+let cachedSegments = null;
+let lastDoorsHash  = '';
 
-    if (r_dx * s_dy === r_dy * s_dx) return null; 
-
-    const T2 = (r_dx * (s_py - r_py) + r_dy * (r_px - s_px)) / (s_dx * r_dy - s_dy * r_dx);
-    const T1 = (s_px + s_dx * T2 - r_px) / r_dx;
-
-    if (T1 > 0 && T2 >= 0 && T2 <= 1) {
-        return { x: r_px + r_dx * T1, y: r_py + r_dy * T1, param: T1 };
-    }
+function getIntersection(ray, seg) {
+    const rpx=ray.a.x, rpy=ray.a.y, rdx=ray.b.x-ray.a.x, rdy=ray.b.y-ray.a.y;
+    const spx=seg.a.x, spy=seg.a.y, sdx=seg.b.x-seg.a.x, sdy=seg.b.y-seg.a.y;
+    if (rdx*sdy===rdy*sdx) return null;
+    const T2=(rdx*(spy-rpy)+rdy*(rpx-spx))/(sdx*rdy-sdy*rdx);
+    const T1=(spx+sdx*T2-rpx)/rdx;
+    if (T1>0&&T2>=0&&T2<=1) return {x:rpx+rdx*T1, y:rpy+rdy*T1, param:T1};
     return null;
 }
 
-function calculateVisibilityPolygon(origin, segments) {
-    let points = [];
-    for(let i = 0; i < segments.length; i++) {
-        points.push(segments[i].a, segments[i].b);
+function calcVisibility(origin, segments) {
+    const pts = [];
+    for (const s of segments) { pts.push(s.a); pts.push(s.b); }
+    const angles = [];
+    for (const p of pts) {
+        const a = Math.atan2(p.y-origin.y, p.x-origin.x);
+        angles.push(a-0.00001, a, a+0.00001);
     }
-    
-    let uniqueAngles = [];
-    for(let p of points) {
-        let angle = Math.atan2(p.y - origin.y, p.x - origin.x);
-        uniqueAngles.push(angle - 0.00001, angle, angle + 0.00001);
+    const hits = [];
+    for (const angle of angles) {
+        const ray = {a:origin, b:{x:origin.x+Math.cos(angle)*5000, y:origin.y+Math.sin(angle)*5000}};
+        let best = null;
+        for (const s of segments) {
+            const h = getIntersection(ray, s);
+            if (h && (!best || h.param < best.param)) best = h;
+        }
+        if (best) { best.angle = angle; hits.push(best); }
+    }
+    hits.sort((a,b) => a.angle-b.angle);
+    return hits;
+}
+
+function buildSegments(level) {
+    const segs = [];
+    const addRect = (x,y,w,h) => {
+        segs.push({a:{x,y},       b:{x:x+w,y}});
+        segs.push({a:{x:x+w,y},   b:{x:x+w,y:y+h}});
+        segs.push({a:{x:x+w,y:y+h},b:{x,y:y+h}});
+        segs.push({a:{x,y:y+h},   b:{x,y}});
+    };
+    addRect(0,0,level.width,level.height);
+    for (const w of level.walls)               addRect(w.x-0.1,w.y-0.1,w.w+0.2,w.h+0.2);
+    for (const d of level.doors) if (!d.open)  addRect(d.x-0.1,d.y-0.1,d.w+0.2,d.h+0.2);
+    return segs;
+}
+
+function drawFog(level, players) {
+    if (fogCanvas.width!==canvas.width||fogCanvas.height!==canvas.height) {
+        fogCanvas.width=canvas.width; fogCanvas.height=canvas.height;
     }
 
-    let intersects = [];
-    for(let angle of uniqueAngles) {
-        let ray = {
-            a: origin,
-            b: { x: origin.x + Math.cos(angle)*3000, y: origin.y + Math.sin(angle)*3000 }
-        };
+    const hash = level.doors.map(d=>d.open?1:0).join('');
+    if (!cachedSegments || hash!==lastDoorsHash) {
+        cachedSegments = buildSegments(level);
+        lastDoorsHash  = hash;
+    }
 
-        let closestIntersect = null;
-        for(let s of segments) {
-            let intersect = getIntersection(ray, s);
-            if(!intersect) continue;
-            if(!closestIntersect || intersect.param < closestIntersect.param) {
-                closestIntersect = intersect;
+    fogCtx.globalCompositeOperation='source-over';
+    fogCtx.clearRect(0,0,fogCanvas.width,fogCanvas.height);
+    fogCtx.fillStyle='#050510';
+    fogCtx.fillRect(0,0,fogCanvas.width,fogCanvas.height);
+    fogCtx.globalCompositeOperation='destination-out';
+
+    const pList = Object.values(players);
+
+    for (const p of pList) {
+        if (p.isDead) continue;
+        let radius = 160;
+        for (const o of pList) {
+            if (o !== p && !o.isDead) {
+                const dx=p.x-o.x, dy=p.y-o.y;
+                const d = Math.sqrt(dx*dx+dy*dy);
+                if (d < 320) radius = Math.min(420, radius + (320-d)*0.4);
             }
         }
 
-        if(closestIntersect) {
-            closestIntersect.angle = angle;
-            intersects.push(closestIntersect);
+        const poly = calcVisibility({x:p.x, y:p.y}, cachedSegments);
+        if (!poly.length) continue;
+
+        fogCtx.save();
+        fogCtx.translate(canvas.width/2,  canvas.height/2);
+        fogCtx.scale(camera.scale, camera.scale);
+        fogCtx.translate(-camera.x, -camera.y);
+
+        fogCtx.beginPath();
+        fogCtx.moveTo(poly[0].x, poly[0].y);
+        for (let i=1;i<poly.length;i++) fogCtx.lineTo(poly[i].x, poly[i].y);
+        fogCtx.closePath();
+
+        const g = fogCtx.createRadialGradient(p.x,p.y,radius*0.1, p.x,p.y,radius);
+        g.addColorStop(0,'rgba(0,0,0,1)');
+        g.addColorStop(0.7,'rgba(0,0,0,0.5)');
+        g.addColorStop(1,'rgba(0,0,0,0)');
+        fogCtx.fillStyle=g;
+        fogCtx.fill();
+        fogCtx.restore();
+    }
+}
+
+// ── Caméra ───────────────────────────────────────────────────────────
+let camera = {x:0, y:0, scale:1};
+
+function updateCamera(level, players) {
+    const pIds = Object.keys(players);
+    let tx = level.width/2, ty = level.height/2, ts = 1.0;
+
+    const alive = pIds.filter(id => !players[id].isDead);
+    if (alive.length > 0) {
+        let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+        for (const id of alive) {
+            const p = players[id];
+            if (p.x<minX) minX=p.x; if (p.y<minY) minY=p.y;
+            if (p.x>maxX) maxX=p.x; if (p.y>maxY) maxY=p.y;
         }
+        tx=(minX+maxX)/2; ty=(minY+maxY)/2;
+        const bw=maxX-minX+600, bh=maxY-minY+600;
+        ts = Math.min(canvas.width/bw, canvas.height/bh, 1.4);
+        ts = Math.max(ts, 0.2);
     }
-
-    intersects.sort((a,b) => a.angle - b.angle);
-    return intersects;
+    camera.x += (tx-camera.x)*0.1;
+    camera.y += (ty-camera.y)*0.1;
+    camera.scale += (ts-camera.scale)*0.1;
 }
 
-// Rendu global accessible via la page
-window.startGame = function() {
-    tryPlayBackgroundMusic();
-    socket.emit('startGame');
-}
-
-window.cancelGame = function() {
-    socket.emit('cancelGame');
-}
-
-socket.on('gameClosed', (data) => {
-    let msg = (data && data.reason === 'no-players') 
-        ? "La partie est terminée car tous les joueurs sont partis." 
-        : "Partie annulée !";
-    alert(msg).then(() => {
-        window.location.href = '/';
-    });
-});
-
-let camera = { x: 0, y: 0, scale: 1 };
-const fogCanvas = document.createElement('canvas');
-const fogCtx = fogCanvas.getContext('2d', { willReadFrequently: true });
-
-
-// ── BOUCLE DE RENDU ──────────────────────────────────────────────────
-function draw() {
-    ctx.fillStyle = '#1e1e24';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Si la partie n'est pas commencée ou s'il n'y a pas de niveau, on stoppe l'animation et on dessine juste le fond
-    if(!gameState.level || gameState.status === 'lobby') {
-        stopWalkingSound();
-        requestAnimationFrame(draw);
-        return;
-    }
-
-    let pIds = Object.keys(gameState.players);
-    let pCount = pIds.length;
-    const isAnyPlayerMoving = pIds.some((id) => {
-        const player = gameState.players[id];
-        return player.vx !== 0 || player.vy !== 0;
-    });
-
-    if (gameState.status === 'playing' && isAnyPlayerMoving) {
-        tryPlayWalkingSound();
-    } else {
-        stopWalkingSound();
-    }
-    
-    // --- Calcul Caméra ---
-    let targetX = gameState.level.width / 2;
-    let targetY = gameState.level.height / 2;
-    let targetScale = 1.0;
-
-    if (pCount > 0) {
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        for(let id of pIds) {
-            let p = gameState.players[id];
-            if(p.x < minX) minX = p.x;
-            if(p.y < minY) minY = p.y;
-            if(p.x > maxX) maxX = p.x;
-            if(p.y > maxY) maxY = p.y;
-        }
-        targetX = (minX + maxX) / 2;
-        targetY = (minY + maxY) / 2;
-        
-        let bw = (maxX - minX) + 600;
-        let bh = (maxY - minY) + 600; 
-        
-        targetScale = Math.min(canvas.width / bw, canvas.height / bh);
-        if(targetScale > 1.2) targetScale = 1.2;
-        if(targetScale < 0.2) targetScale = 0.2;
-    }
-
-    camera.x += (targetX - camera.x) * 0.1;
-    camera.y += (targetY - camera.y) * 0.1;
-    camera.scale += (targetScale - camera.scale) * 0.1;
-
+// ── Dessin d'un joueur ───────────────────────────────────────────────
+function drawPlayer(p) {
     ctx.save();
-    ctx.translate(canvas.width / 2, canvas.height / 2);
-    ctx.scale(camera.scale, camera.scale);
-    ctx.translate(-camera.x, -camera.y);
+    ctx.translate(p.x, p.y);
 
-    // ── 1. LE SOL (Herbe) ────────────────────────────────
-    if (gameState.level.rooms) {
-        const roomColors = {
-            A: 'rgba(46, 204, 113, 0.15)',
-            B: 'rgba(52, 152, 219, 0.15)',  
-            C: 'rgba(230, 126, 34, 0.15)',  
-            D: 'rgba(231, 76, 60, 0.15)'    
-        };
-        const roomLabels = { A: '🏠 SPAWN', B: '🔵 TAMPON', C: '🟠 VERROU', D: '🚪 SORTIE' };
-        
-        for (const [key, room] of Object.entries(gameState.level.rooms)) {
-            let hasTexture = drawWorldTiled(ctx, textures.herbe, room.x, room.y, room.w, room.h, 64);
-            
-            ctx.fillStyle = hasTexture ? roomColors[key] : roomColors[key].replace('0.15', '0.07');
-            ctx.fillRect(room.x, room.y, room.w, room.h);
-            ctx.fillStyle = roomColors[key].replace('0.15', '0.4');
-            ctx.font = 'bold 28px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText(roomLabels[key], room.x + room.w / 2, room.y + 60);
-        }
+    if (p.isDead) {
+        ctx.globalAlpha = 0.3;
+    } else if (p.invuln > 0) {
+        ctx.globalAlpha = (Math.floor(Date.now()/100)%2===0) ? 0.35 : 1.0;
     }
 
-    // ── 2. SORTIE ──────────────────────────────────────────────────
-    let exitR = gameState.level.exit.r || 30;
-    ctx.save();
-    if (gameState.level.exit.active) {
-        ctx.shadowColor = '#2ecc71';
-        ctx.shadowBlur  = 30;
+    // Pseudo
+    ctx.fillStyle='#fff'; ctx.font='bold 22px Arial'; ctx.textAlign='center';
+    ctx.lineWidth=4; ctx.strokeStyle='#000';
+    ctx.strokeText(p.pseudo, 0, -42); ctx.fillText(p.pseudo, 0, -42);
+
+    // HP ou MORT
+    if (!p.isDead) {
+        ctx.font='14px Arial';
+        ctx.fillText('❤️'.repeat(p.hp)+'🖤'.repeat(2-p.hp), 0, -26);
     } else {
-        ctx.globalAlpha = 0.5;
+        ctx.fillStyle='#e74c3c'; ctx.font='bold 14px Arial';
+        ctx.fillText('MORT', 0, -26);
     }
-    
-    let isExitDrawn = drawAnimatedCenter(ctx, textures.sortie, gameState.level.exit.x, gameState.level.exit.y, exitR * 2.5, 150);
-    
-    if (!isExitDrawn) {
-        ctx.fillStyle = gameState.level.exit.active ? '#2ecc71' : '#7f8c8d';
+
+    // Corps
+    ctx.fillStyle = p.color;
+    if (p.actionBlink>0) { ctx.shadowColor='#fff'; ctx.shadowBlur=Math.min(20,p.actionBlink*3); }
+
+    const sh = p.shape;
+    if      (sh==='square')   { ctx.fillRect(-20,-20,40,40); }
+    else if (sh==='circle')   { ctx.beginPath(); ctx.arc(0,0,20,0,Math.PI*2); ctx.fill(); }
+    else if (sh==='triangle') { ctx.beginPath(); ctx.moveTo(0,-20); ctx.lineTo(20,20); ctx.lineTo(-20,20); ctx.closePath(); ctx.fill(); }
+    else if (sh==='cross')    { ctx.fillRect(-20,-6,40,12); ctx.fillRect(-6,-20,12,40); }
+    else if (sh==='star') {
         ctx.beginPath();
-        ctx.arc(gameState.level.exit.x, gameState.level.exit.y, exitR, 0, Math.PI*2);
-        ctx.fill();
+        for (let i=0;i<5;i++) {
+            ctx.lineTo(Math.cos((18+i*72)/180*Math.PI)*20,-Math.sin((18+i*72)/180*Math.PI)*20);
+            ctx.lineTo(Math.cos((54+i*72)/180*Math.PI)*10,-Math.sin((54+i*72)/180*Math.PI)*10);
+        }
+        ctx.closePath(); ctx.fill();
+    }
+
+    // Yeux
+    ctx.fillStyle='#111'; ctx.shadowBlur=0;
+    ctx.beginPath(); ctx.arc(-6,-4,3,0,Math.PI*2); ctx.arc(6,-4,3,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#111'; ctx.lineWidth=2;
+    ctx.beginPath();
+    if (p.isDead) { ctx.arc(0,10,6,Math.PI+0.2,Math.PI*2-0.2); }
+    else          { ctx.arc(0,4,6,0.2,Math.PI-0.2); }
+    ctx.stroke();
+    ctx.restore();
+}
+
+// ── Boutons ──────────────────────────────────────────────────────────
+function drawButton(b) {
+    ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
+    ctx.fillStyle = b.pressed ? '#2ecc71' : b.color;
+    if (b.pressed) { ctx.shadowColor='#2ecc71'; ctx.shadowBlur=20; }
+    ctx.fill(); ctx.shadowBlur=0;
+    ctx.strokeStyle='#fff'; ctx.lineWidth=4; ctx.stroke();
+
+    ctx.fillStyle='#000'; ctx.font='bold 18px Arial'; ctx.textAlign='center';
+    ctx.fillText(b.currentCount+'/'+b.reqCount, b.x, b.y+6);
+    if (b.label) {
+        ctx.fillStyle='rgba(255,255,255,0.7)'; ctx.font='bold 13px Arial';
+        ctx.fillText(b.label, b.x, b.y+b.r+18);
+    }
+}
+
+// ── Sortie ───────────────────────────────────────────────────────────
+function drawExit(ex) {
+    const r = ex.r||40;
+    ctx.save();
+    if (ex.active) { ctx.shadowColor='#2ecc71'; ctx.shadowBlur=30; }
+    else ctx.globalAlpha=0.55;
+
+    const ok = drawSprite(ANIM.sortie, ex.x, ex.y, r*2.8);
+    if (!ok) {
+        ctx.beginPath(); ctx.arc(ex.x,ex.y,r,0,Math.PI*2);
+        ctx.fillStyle = ex.active ? '#2ecc71' : '#7f8c8d'; ctx.fill();
     }
     ctx.restore();
-    
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 22px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('SORTIE', gameState.level.exit.x, gameState.level.exit.y + 8);
+    ctx.fillStyle='#fff'; ctx.font='bold 20px Arial'; ctx.textAlign='center';
+    ctx.strokeStyle='#000'; ctx.lineWidth=3;
+    ctx.strokeText('SORTIE', ex.x, ex.y+8); ctx.fillText('SORTIE', ex.x, ex.y+8);
+}
 
-    // ── 3. BOUTONS ──────────────────────────────────────────────────
-    for(let b of gameState.level.buttons) {
-        ctx.fillStyle = b.pressed ? '#2ecc71' : b.color;
-        ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2); ctx.fill();
-        ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.stroke();
-        ctx.fillStyle = '#000'; ctx.font = 'bold 20px Arial';
-        if(b.reqShape) ctx.fillText(b.reqShape.substring(0,3).toUpperCase(), b.x-18, b.y+7);
-        else if(b.reqCount) ctx.fillText(b.currentCount + '/' + b.reqCount, b.x-15, b.y+7);
+// ── Pièces ───────────────────────────────────────────────────────────
+function drawCoin(c) {
+    const ok = drawSprite(ANIM.piece, c.x, c.y, 36);
+    if (!ok) {
+        ctx.beginPath(); ctx.arc(c.x,c.y,14,0,Math.PI*2);
+        ctx.fillStyle='#f1c40f'; ctx.fill();
+        ctx.strokeStyle='#f39c12'; ctx.lineWidth=3; ctx.stroke();
     }
+}
 
-    // ── 4. PIÈCES ──────────────────────────────────────────────────
-    for(let c of gameState.level.coins) {
-        if(!c.collected) {
-            let isDrawn = drawAnimatedCenter(ctx, textures.piece, c.x, c.y, 32, 100);
-            if (!isDrawn) {
-                ctx.fillStyle = '#f1c40f'; ctx.beginPath(); ctx.arc(c.x, c.y, 15, 0, Math.PI*2);
-                ctx.fill(); ctx.strokeStyle = '#f39c12'; ctx.lineWidth = 3; ctx.stroke();
-            }
-        }
+// ── Pièges (tiles animés) ─────────────────────────────────────────────
+function drawTrap(t) {
+    // On dessine le piège comme un sprite 40×40 centré sur t.x, t.y
+    // On choisit pikkux (horizontal) ou pikkuy (vertical)
+    const ok = drawSprite(ANIM.pikkux, t.x, t.y, TILE);
+    if (!ok) {
+        ctx.fillStyle='#c0392b';
+        ctx.fillRect(t.x-TILE/2, t.y-TILE/2, TILE, TILE);
+        ctx.strokeStyle='#922b21'; ctx.lineWidth=2;
+        ctx.strokeRect(t.x-TILE/2, t.y-TILE/2, TILE, TILE);
     }
+}
 
-    // ── 5. JOUEURS ──────────────────────────────────────────────────
-    for (const id in gameState.players) {
-        const player = gameState.players[id];
+// ── Reliques ─────────────────────────────────────────────────────────
+function drawRelic(rel) {
+    ctx.save();
+    ctx.translate(rel.x, rel.y);
+    ctx.rotate(Date.now()/500);
+    ctx.fillStyle='#9b59b6';
+    ctx.shadowColor='#9b59b6'; ctx.shadowBlur=15;
+    ctx.beginPath(); ctx.moveTo(0,-20); ctx.lineTo(17,10); ctx.lineTo(-17,10); ctx.closePath();
+    ctx.fill(); ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.stroke();
+    ctx.restore();
+}
+
+// ── Indices au sol ───────────────────────────────────────────────────
+function drawFloorClues(clues, level) {
+    if (!clues) return;
+    for (const clue of clues) {
         ctx.save();
-        ctx.translate(player.x, player.y);
-        
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'center';
-        ctx.lineWidth = 4; ctx.strokeStyle = '#000';
-        ctx.strokeText(player.pseudo, 0, -35); ctx.fillText(player.pseudo, 0, -35);
-        
-        ctx.fillStyle = player.color;
-        if(player.actionBlink > 0) { ctx.shadowColor = '#fff'; ctx.shadowBlur = Math.min(20, player.actionBlink * 3); }
-
-        if (player.shape === 'square') ctx.fillRect(-20, -20, 40, 40);
-        else if (player.shape === 'triangle') { ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(20, 20); ctx.lineTo(-20, 20); ctx.closePath(); ctx.fill(); }
-        else if (player.shape === 'cross') { ctx.fillRect(-20, -6, 40, 12); ctx.fillRect(-6, -20, 12, 40); }
-        else if (player.shape === 'circle') { ctx.beginPath(); ctx.arc(0, 0, 20, 0, Math.PI*2); ctx.fill(); }
-        else if (player.shape === 'star') {
-            ctx.beginPath();
-            for(let i=0; i<5; i++) {
-                ctx.lineTo(Math.cos((18+i*72)/180*Math.PI)*20, -Math.sin((18+i*72)/180*Math.PI)*20);
-                ctx.lineTo(Math.cos((54+i*72)/180*Math.PI)*10, -Math.sin((54+i*72)/180*Math.PI)*10);
+        ctx.fillStyle='rgba(255,255,255,0.8)'; ctx.font='bold 22px Arial';
+        ctx.textAlign='center';
+        ctx.fillText('🔑 CODE', clue.x + clue.colors.length*25, clue.y-14);
+        for (let i=0;i<clue.colors.length;i++) {
+            ctx.fillStyle=clue.colors[i];
+            ctx.shadowColor=clue.colors[i]; ctx.shadowBlur=10;
+            ctx.beginPath(); ctx.arc(clue.x + i*54, clue.y+20, 20, 0, Math.PI*2); ctx.fill();
+            // Numéro
+            if (level && level.sequenceIndex !== undefined) {
+                ctx.fillStyle = i < level.sequenceIndex ? '#2ecc71' : '#fff';
+                ctx.shadowBlur=0; ctx.font='bold 16px Arial';
+                ctx.fillText(i+1, clue.x+i*54, clue.y+26);
             }
-            ctx.closePath(); ctx.fill();
         }
-
-        ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(-6, -4, 3, 0, Math.PI*2); ctx.arc(6, -4, 3, 0, Math.PI*2); ctx.fill();
-        ctx.strokeStyle = '#111'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 4, 6, 0.2, Math.PI - 0.2); ctx.stroke();
         ctx.restore();
     }
+}
 
-    // ── 6. BROUILLARD (Fog of War) ──────────────────────────────────
-    if(fogCanvas.width !== canvas.width || fogCanvas.height !== canvas.height) {
-        fogCanvas.width = canvas.width; fogCanvas.height = canvas.height;
+// ── Boutons de séquence ───────────────────────────────────────────────
+function drawSequenceButtons(sbs, seqIdx) {
+    if (!sbs) return;
+    for (const sb of sbs) {
+        ctx.beginPath(); ctx.arc(sb.x,sb.y,sb.r,0,Math.PI*2);
+        ctx.fillStyle = sb.cooldown>0 ? '#444' : sb.color;
+        if (sb.cooldown<=0) { ctx.shadowColor=sb.color; ctx.shadowBlur=12; }
+        ctx.fill(); ctx.shadowBlur=0;
+        ctx.strokeStyle=sb.cooldown>0?'#888':'#fff'; ctx.lineWidth=3; ctx.stroke();
     }
-    
-    fogCtx.globalCompositeOperation = 'source-over';
-    fogCtx.clearRect(0,0, fogCanvas.width, fogCanvas.height);
-    fogCtx.fillStyle = '#050510'; 
-    fogCtx.fillRect(0, 0, fogCanvas.width, fogCanvas.height);
-    
-    fogCtx.globalCompositeOperation = 'destination-out';
-    
-    let segments = [];
-    let mapBox = [
-        {x:0,y:0}, {x:gameState.level.width, y:0},
-        {x:gameState.level.width, y:gameState.level.height}, {x:0, y:gameState.level.height}
-    ];
-    segments.push({a: mapBox[0], b: mapBox[1]}); segments.push({a: mapBox[1], b: mapBox[2]});
-    segments.push({a: mapBox[2], b: mapBox[3]}); segments.push({a: mapBox[3], b: mapBox[0]});
-
-    const allBlocks = gameState.level.walls.concat(gameState.level.doors.filter(d=>!d.open));
-    for(let w of allBlocks) {
-        segments.push({a:{x:w.x, y:w.y}, b:{x:w.x+w.w, y:w.y}});
-        segments.push({a:{x:w.x+w.w, y:w.y}, b:{x:w.x+w.w, y:w.y+w.h}});
-        segments.push({a:{x:w.x+w.w, y:w.y+w.h}, b:{x:w.x, y:w.y+w.h}});
-        segments.push({a:{x:w.x, y:w.y+w.h}, b:{x:w.x, y:w.y}});
+    if (seqIdx !== undefined && sbs.length > 0) {
+        ctx.fillStyle='rgba(255,255,255,0.85)'; ctx.font='bold 15px Arial';
+        ctx.textAlign='center';
+        ctx.fillText(`Séquence : ${seqIdx}/3`, sbs[0].x + sbs.length*30, sbs[0].y - 36);
     }
+}
 
-    for (const id in gameState.players) {
-        let p = gameState.players[id];
-        let poly = calculateVisibilityPolygon({x: p.x, y: p.y}, segments);
-        if(poly.length > 0) {
-            fogCtx.save();
-            fogCtx.translate(canvas.width / 2, canvas.height / 2);
-            fogCtx.scale(camera.scale, camera.scale);
-            fogCtx.translate(-camera.x, -camera.y);
-            
-            fogCtx.beginPath(); fogCtx.moveTo(poly[0].x, poly[0].y);
-            for(let i=1; i<poly.length; i++) fogCtx.lineTo(poly[i].x, poly[i].y);
-            fogCtx.closePath();
-            
-            let limitRadius = 250;
-            let gradient = fogCtx.createRadialGradient(p.x, p.y, limitRadius * 0.2, p.x, p.y, limitRadius);
-            gradient.addColorStop(0, 'rgba(0,0,0,1)');
-            gradient.addColorStop(0.8, 'rgba(0,0,0,0.3)');
-            gradient.addColorStop(1, 'rgba(0,0,0,0)');
-            
-            fogCtx.fillStyle = gradient; fogCtx.fill(); fogCtx.restore();
-        }
-    }
-
-    ctx.restore(); 
-    ctx.globalAlpha = 1.0;
-    ctx.drawImage(fogCanvas, 0, 0);
-    
-    // ── 7. MURS, PORTES ET PIÈGES (Dessinés par dessus le brouillard) ──
-    ctx.save();
-    ctx.translate(canvas.width / 2, canvas.height / 2);
-    ctx.scale(camera.scale, camera.scale);
-    ctx.translate(-camera.x, -camera.y);
-    
-    // Murs
-    for(let w of gameState.level.walls) {
-        const isMaze = Math.min(w.w, w.h) <= 22;
-        
-        let hasTex = drawWorldTiled(ctx, textures.feuille, w.x, w.y, w.w, w.h, 64);
-        
-        ctx.fillStyle = hasTex ? (isMaze ? 'rgba(42, 42, 58, 0.4)' : 'rgba(13, 13, 20, 0.4)') : (isMaze ? '#2a2a3a' : '#0d0d14');
-        ctx.fillRect(w.x, w.y, w.w, w.h);
-        
-        ctx.strokeStyle = isMaze ? '#3a3a55' : '#00ffcc';
-        ctx.lineWidth = isMaze ? 0.5 : 1.5;
-        ctx.strokeRect(w.x, w.y, w.w, w.h);
-    }
-
-    // Portes
-    for(let d of gameState.level.doors) {
-        if(!d.open) {
-            const btn = gameState.level.buttons ? gameState.level.buttons.find(b => b.id === d.linkedButton) : null;
-            const dCol = btn ? btn.color : '#e74c3c';
-            ctx.fillStyle = dCol + 'cc'; ctx.fillRect(d.x, d.y, d.w, d.h);
-            ctx.strokeStyle = dCol; ctx.lineWidth = 2; ctx.strokeRect(d.x, d.y, d.w, d.h);
-            ctx.fillStyle = '#fff'; ctx.font = 'bold 20px Arial'; ctx.textAlign = 'center';
-            ctx.fillText('🔒', d.x + d.w / 2, d.y + d.h / 2 + 7);
+// ── Portes dessinées par-dessus le fog ────────────────────────────────
+function drawDoors(doors, buttons) {
+    for (const d of doors) {
+        if (!d.open) {
+            const btn = buttons ? buttons.find(b=>b.id===d.linkedButton) : null;
+            const col = btn ? btn.color : '#e74c3c';
+            ctx.fillStyle = col+'bb'; ctx.fillRect(d.x,d.y,d.w,d.h);
+            ctx.strokeStyle=col; ctx.lineWidth=2; ctx.strokeRect(d.x,d.y,d.w,d.h);
+            ctx.font='bold 18px Arial'; ctx.textAlign='center';
+            ctx.fillStyle='#fff';
+            ctx.fillText('🔒', d.x+d.w/2, d.y+d.h/2+7);
         } else {
-            ctx.strokeStyle = '#2ecc71'; ctx.lineWidth = 2; ctx.setLineDash([8, 6]);
-            ctx.strokeRect(d.x, d.y, d.w, d.h); ctx.setLineDash([]);
+            ctx.strokeStyle='#2ecc71'; ctx.lineWidth=2;
+            ctx.setLineDash([8,5]); ctx.strokeRect(d.x,d.y,d.w,d.h); ctx.setLineDash([]);
         }
     }
+}
 
-    // Pièges
-    if (gameState.level.traps) {
-        for(let t of gameState.level.traps) {
-            let isHorizontal = t.w > t.h;
-            let img = isHorizontal ? textures.pikkux : textures.pikkuy;
-            
-            let isDrawn = drawTrapTexture(ctx, img, t.x, t.y, t.w, t.h, isHorizontal);
-            if (!isDrawn) {
-                ctx.fillStyle = '#e74c3c'; 
-                ctx.fillRect(t.x, t.y, t.w, t.h);
+// ── UI de jeu (HUD) ──────────────────────────────────────────────────
+function drawHUD(state) {
+    const pIds   = Object.keys(state.players);
+    const pCount = pIds.length;
+    const alive  = pIds.filter(id=>!state.players[id].isDead).length;
+
+    // Compteur joueurs
+    ctx.fillStyle='rgba(0,0,0,0.55)';
+    ctx.beginPath(); ctx.roundRect(14,10,200,44,10); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.font='bold 20px Arial'; ctx.textAlign='left';
+    ctx.fillText(`👥 ${alive}/${pCount} en vie`, 26, 38);
+
+    // Timer
+    if (state.timeLeft !== undefined) {
+        const mins = Math.floor(state.timeLeft/60);
+        const secs = state.timeLeft%60;
+        const ts   = `${mins}:${secs<10?'0':''}${secs}`;
+        const danger = state.timeLeft < 30;
+        ctx.fillStyle = danger ? 'rgba(180,30,30,0.75)' : 'rgba(0,0,0,0.55)';
+        ctx.beginPath(); ctx.roundRect(canvas.width/2-70,10,140,48,12); ctx.fill();
+        ctx.fillStyle = danger ? '#ff6b6b' : '#fff';
+        ctx.font='bold 32px Arial'; ctx.textAlign='center';
+        ctx.fillText(ts, canvas.width/2, 46);
+    }
+
+    // Quêtes
+    if (state.status==='playing' && state.level?.quests) {
+        // Détecte si un joueur est sous le panneau
+        let underUI = false;
+        for (const id of pIds) {
+            const p = state.players[id];
+            const sx=(p.x-camera.x)*camera.scale+canvas.width/2;
+            const sy=(p.y-camera.y)*camera.scale+canvas.height/2;
+            if (sx>10&&sx<430&&sy>52&&sy<280) { underUI=true; break; }
+        }
+        const alpha = underUI ? 0.15 : 0.82;
+        ctx.globalAlpha=alpha;
+        ctx.fillStyle='rgba(12,12,20,1)';
+        const qh = 50 + state.level.quests.length*32;
+        ctx.beginPath(); ctx.roundRect(14,64,410,qh,14); ctx.fill();
+        ctx.strokeStyle='#2ecc71'; ctx.lineWidth=2; ctx.stroke();
+        ctx.globalAlpha=1;
+
+        ctx.globalAlpha = underUI?0.2:1.0;
+        ctx.fillStyle='#f1c40f'; ctx.font='bold 18px Arial'; ctx.textAlign='left';
+        ctx.fillText('🏆 Quêtes & Objectifs', 30, 94);
+        ctx.font='bold 14px Arial';
+        let qy=120;
+        for (const q of state.level.quests) {
+            ctx.fillStyle = q.done ? '#2ecc71' : '#ccc';
+            ctx.fillText((q.done?'✅ ':'⬜ ')+q.text, 30, qy);
+            qy+=30;
+        }
+        ctx.globalAlpha=1.0;
+    }
+}
+
+// ── États spéciaux (overlay) ──────────────────────────────────────────
+function drawOverlays(state) {
+    if (state.status==='starting') {
+        ctx.fillStyle='rgba(0,0,0,0.72)'; ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.fillStyle='#f1c40f'; ctx.font='bold 140px Arial'; ctx.textAlign='center';
+        ctx.fillText(state.countdown, canvas.width/2, canvas.height/2+50);
+        ctx.fillStyle='#fff'; ctx.font='bold 28px Arial';
+        ctx.fillText('Préparez-vous !', canvas.width/2, canvas.height/2-90);
+    } else if (state.status==='defeat') {
+        ctx.fillStyle='rgba(180,30,30,0.82)'; ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.fillStyle='#fff'; ctx.font='bold 80px Arial'; ctx.textAlign='center';
+        ctx.fillText('TEMPS ÉCOULÉ', canvas.width/2, canvas.height/2-20);
+        ctx.font='bold 32px Arial'; ctx.fillStyle='#fca5a5';
+        ctx.fillText('ou tous morts…', canvas.width/2, canvas.height/2+50);
+    }
+}
+
+// ── Lobby / Victory UI ────────────────────────────────────────────────
+const lobbyUI   = document.getElementById('lobby-ui');
+const victoryUI = document.getElementById('victory-ui');
+const pCountSpan    = document.getElementById('player-count');
+const gameCodeDisp  = document.getElementById('game-code-display');
+const playersList   = document.getElementById('players-list');
+const joinUrlText   = document.getElementById('join-url-text');
+const qrCodeImg     = document.getElementById('qr-code-img');
+
+// ── Son ───────────────────────────────────────────────────────────────
+const bgMusic     = new Audio('/assets/son/music.mp3');
+bgMusic.loop=true; bgMusic.volume=0.35;
+const walkSound   = new Audio('/assets/son/marche.mp3');
+walkSound.loop=true; walkSound.volume=0.4;
+
+function tryBgMusic()  { if (bgMusic.paused)   bgMusic.play().catch(()=>{}); }
+function tryWalk()     { if (walkSound.paused)  walkSound.play().catch(()=>{}); }
+function stopWalk()    { if (!walkSound.paused) { walkSound.pause(); walkSound.currentTime=0; } }
+
+const unlockAudio = () => {
+    tryBgMusic();
+    document.removeEventListener('pointerdown', unlockAudio);
+    document.removeEventListener('keydown',     unlockAudio);
+};
+tryBgMusic();
+document.addEventListener('pointerdown', unlockAudio, {passive:true});
+document.addEventListener('keydown',     unlockAudio);
+
+// ── État global ───────────────────────────────────────────────────────
+let gameState = {players:{}, level:null, status:'lobby'};
+let lastLevelId = null;
+
+socket.emit('createGame', {pseudo: new URLSearchParams(window.location.search).get('pseudo')||'Host'}, (r)=>{
+    if (r.success) console.log('Game created:', r.code);
+});
+
+socket.on('stateUpdate', (state) => {
+    gameState = state;
+
+    // Rebuild tilemap if level changed
+    if (state.level && state.level !== lastLevelId) {
+        buildMatrix(state.level);
+        lastLevelId = state.level;
+        cachedSegments = null; // invalidate fog cache
+    }
+
+    // Lobby / Victory UI
+    if (state.status==='lobby' || state.status==='defeat') {
+        if (lobbyUI)   lobbyUI.style.display='flex';
+        if (victoryUI) victoryUI.style.display='none';
+        if (pCountSpan)   pCountSpan.innerText = Object.keys(state.players).length;
+        if (gameCodeDisp) gameCodeDisp.innerText = state.code;
+        if (playersList) {
+            playersList.innerHTML='';
+            for (const id in state.players) {
+                const p=state.players[id];
+                playersList.innerHTML+=`<li style="margin-bottom:10px;display:flex;align-items:center;">
+                  <span style="display:inline-block;width:20px;height:20px;background:${p.color};border-radius:50%;margin-right:15px;border:2px solid white;"></span>${p.pseudo}</li>`;
             }
         }
+        if (state.qrCodeDataUrl && qrCodeImg && qrCodeImg.src!==state.qrCodeDataUrl) {
+            if (joinUrlText) joinUrlText.innerText=state.joinUrl;
+            qrCodeImg.src=state.qrCodeDataUrl; qrCodeImg.style.display='block';
+        }
+    } else if (state.status==='victory') {
+        if (lobbyUI)   lobbyUI.style.display='none';
+        if (victoryUI) victoryUI.style.display='flex';
+    } else {
+        if (lobbyUI)   lobbyUI.style.display='none';
+        if (victoryUI) victoryUI.style.display='none';
+    }
+});
+
+socket.on('gameClosed', (data) => {
+    const msg = (data&&data.reason==='no-players')
+        ? "La partie est terminée car tous les joueurs sont partis."
+        : "Partie annulée !";
+    alert(msg).then(()=>{ window.location.href='/'; });
+});
+
+window.startGame  = () => { tryBgMusic(); socket.emit('startGame'); };
+window.cancelGame = () => { socket.emit('cancelGame'); };
+
+// ── Boucle de rendu principale ────────────────────────────────────────
+function draw() {
+    ctx.fillStyle='#1e1e24';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    const status  = gameState.status;
+    const level   = gameState.level;
+    const players = gameState.players;
+
+    if (!level || status==='lobby') {
+        stopWalk(); requestAnimationFrame(draw); return;
     }
 
+    // Rebuild matrix if needed (first frame after start)
+    if (!tileMatrix) buildMatrix(level);
+
+    updateCamera(level, players);
+
+    const pIds   = Object.keys(players);
+    const moving = pIds.some(id=>{ const p=players[id]; return p.vx!==0||p.vy!==0; });
+    if (status==='playing' && moving) tryWalk(); else stopWalk();
+
+    // ── Début du contexte monde ──────────────────────────────────────
+    ctx.save();
+    ctx.translate(canvas.width/2, canvas.height/2);
+    ctx.scale(camera.scale, camera.scale);
+    ctx.translate(-camera.x, -camera.y);
+
+    // 1. Tilemap (sol + murs)
+    renderTilemap(level.doors);
+
+    // 2. Labels de salles
+    if (level.rooms) {
+        const roomLabels = {A:'🏠 SPAWN', B:'🔵 TAMPON', C:'🟠 VERROU', D:'🚪 SORTIE'};
+        const roomColors = {A:'rgba(46,204,113,0.12)', B:'rgba(52,152,219,0.12)', C:'rgba(230,126,34,0.12)', D:'rgba(231,76,60,0.12)'};
+        ctx.font='bold 26px Arial'; ctx.textAlign='center';
+        for (const [k,r] of Object.entries(level.rooms)) {
+            ctx.fillStyle=roomColors[k]; ctx.fillRect(r.x,r.y,r.w,r.h);
+            ctx.fillStyle=roomColors[k].replace('0.12','0.45');
+            ctx.fillText(roomLabels[k], r.x+r.w/2, r.y+52);
+        }
+    }
+
+    // 3. Sortie
+    drawExit(level.exit);
+
+    // 4. Boutons
+    for (const b of level.buttons) drawButton(b);
+
+    // 5. Pièces
+    for (const c of level.coins) if (!c.collected) drawCoin(c);
+
+    // 6. Pièges
+    if (level.traps) for (const t of level.traps) drawTrap(t);
+
+    // 7. Reliques
+    if (level.relics) for (const r of level.relics) if (!r.collected) drawRelic(r);
+
+    // 8. Indices au sol
+    drawFloorClues(level.floorClues, level);
+
+    // 9. Boutons de séquence
+    drawSequenceButtons(level.sequenceButtons, level.sequenceIndex);
+
+    // 10. Joueurs
+    for (const id of pIds) drawPlayer(players[id]);
+
+    ctx.restore(); // fin monde
+
+    // 11. Fog of War (appliqué en screen-space)
+    drawFog(level, players);
+    ctx.drawImage(fogCanvas,0,0);
+
+    // 12. Murs + Portes dessinés PAR-DESSUS le fog (visible même dans le brouillard)
+    ctx.save();
+    ctx.translate(canvas.width/2, canvas.height/2);
+    ctx.scale(camera.scale, camera.scale);
+    ctx.translate(-camera.x, -camera.y);
+    drawDoors(level.doors, level.buttons);
     ctx.restore();
-    
-    // ── 8. INTERFACE (UI) ──────────────────────────────────────────────
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'left';
-    ctx.fillText(`Joueurs: ${pCount}`, 20, 40);
 
-    if(gameState.status === 'starting') {
-        ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#f1c40f'; ctx.font = 'bold 120px Arial'; ctx.textAlign = 'center';
-        ctx.fillText(gameState.countdown, canvas.width/2, canvas.height/2);
-    } else if(gameState.timeLeft !== undefined) {
-        let mins = Math.floor(gameState.timeLeft / 60); let secs = gameState.timeLeft % 60;
-        let timeStr = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-        
-        ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.beginPath();
-        ctx.roundRect(canvas.width/2 - 80, 10, 160, 60, 20); ctx.fill();
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 36px Arial'; ctx.textAlign = 'center';
-        ctx.fillText(timeStr, canvas.width / 2, 52);
-    }
-    
-    if(gameState.status === 'playing' && gameState.level.quests) {
-        let isUnderUI = false;
-        for (const id in gameState.players) {
-            let p = gameState.players[id];
-            let sx = (p.x - camera.x) * camera.scale + canvas.width / 2;
-            let sy = (p.y - camera.y) * camera.scale + canvas.height / 2;
-            if (sx > 10 && sx < 430 && sy > 50 && sy < 270) { isUnderUI = true; break; }
-        }
-        
-        let alpha = isUnderUI ? 0.2 : 0.8;
-        ctx.fillStyle = `rgba(20, 20, 25, ${alpha})`; ctx.beginPath();
-        ctx.roundRect(20, 60, 400, 200, 15); ctx.fill();
-        ctx.globalAlpha = isUnderUI ? 0.3 : 1.0;
-        ctx.strokeStyle = '#2ecc71'; ctx.lineWidth = 2; ctx.stroke();
+    // 13. HUD
+    if (status==='playing' || status==='starting') drawHUD(gameState);
 
-        ctx.fillStyle = '#f1c40f'; ctx.font = 'bold 20px Arial'; ctx.textAlign = 'left';
-        ctx.fillText('🏆 Quêtes & Objectifs', 40, 95);
+    // 14. Overlays
+    drawOverlays(gameState);
 
-        ctx.font = 'bold 16px Arial';
-        let y = 135;
-        for(let q of gameState.level.quests) {
-            ctx.fillStyle = q.done ? '#2ecc71' : '#fff';
-            ctx.fillText((q.done ? '✅ ' : '⬜ ') + q.text, 40, y);
-            y += 35;
-        }
-        ctx.globalAlpha = 1.0; 
-    }
-    
-    if (gameState.status === 'defeat') {
-        ctx.fillStyle = 'rgba(231, 76, 60, 0.8)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 80px Arial'; ctx.textAlign = 'center';
-        ctx.fillText('TEMPS ÉCOULÉ', canvas.width / 2, canvas.height / 2);
-    }
-    
     requestAnimationFrame(draw);
 }
 
