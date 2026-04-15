@@ -70,7 +70,37 @@ function normalizePseudo(rawPseudo, fallback) {
     return cleaned || fallback;
 }
 
-const TICK_RATE = 20;// 60 FPS
+const TICK_RATE = 20; // 50 ticks/s for physics
+const NETWORK_TICK_RATE = 50; // 20 updates/s over the wire
+const FORCE_SYNC_RATE = 250; // force a periodic sync even when idle
+
+function markGameDirty(gameCode) {
+    const game = games[gameCode];
+    if (!game) return;
+    game.netDirty = true;
+}
+
+function buildDynamicState(gameState) {
+    const dynamicLevel = gameState.level ? {
+        buttons: gameState.level.buttons,
+        doors: gameState.level.doors,
+        coins: gameState.level.coins,
+        hearts: gameState.level.hearts,
+        traps: gameState.level.traps,
+        exit: gameState.level.exit,
+        quests: gameState.level.quests,
+        sequenceIndex: gameState.level.sequenceIndex,
+        sequenceButtons: gameState.level.sequenceButtons
+    } : null;
+
+    return {
+        status: gameState.status,
+        timeLeft: gameState.timeLeft,
+        countdown: gameState.countdown,
+        players: gameState.players,
+        level: dynamicLevel
+    };
+}
 
 io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
@@ -88,7 +118,10 @@ io.on('connection', (socket) => {
             players: {},
             joinUrl: joinUrl,
             qrCodeDataUrl: '',
-            level: gameLogic.generateLevel(2) // Default level
+            level: gameLogic.generateLevel(2), // Default level
+            netElapsed: 0,
+            netForceElapsed: 0,
+            netDirty: true
         };
 
         qrcode.toDataURL(joinUrl, { margin: 2, scale: 6, color: { dark: '#000000', light: '#ffffff' } }, (err, url) => {
@@ -96,6 +129,7 @@ io.on('connection', (socket) => {
                 games[code].qrCodeDataUrl = url;
                 if (games[code]) {
                     io.to(code).emit('stateUpdate', games[code]);
+                    markGameDirty(code);
                 }
             }
         });
@@ -155,6 +189,7 @@ io.on('connection', (socket) => {
         // S'il s'est reconnecté, on arrête la fonction ici
         if (reconnected) {
             io.to(code).emit('stateUpdate', game);
+            markGameDirty(code);
             callback({ success: true, code: code });
             return;
         }
@@ -198,6 +233,7 @@ io.on('connection', (socket) => {
         };
 
         io.to(code).emit('stateUpdate', game);
+        markGameDirty(code);
         callback({ success: true, code: code });
         console.log(`Player ${playerPseudo} joined ${code}`);
     });
@@ -217,6 +253,7 @@ io.on('connection', (socket) => {
                 game.countdown = 5;
                 game.level = gameLogic.generateLevel(playerCount);
                 io.to(code).emit('stateUpdate', game);
+                markGameDirty(code);
             }
         }
     });
@@ -253,6 +290,7 @@ io.on('connection', (socket) => {
         }
 
         io.to(code).emit('stateUpdate', game);
+        markGameDirty(code);
     });
 
     socket.on('input', (data) => {
@@ -262,10 +300,18 @@ io.on('connection', (socket) => {
             if (!player) return;
 
             if (data.type === 'move') {
+                const oldVx = player.vx;
+                const oldVy = player.vy;
                 player.vx = data.dx;
                 player.vy = data.dy;
+                if (oldVx !== player.vx || oldVy !== player.vy) {
+                    markGameDirty(code);
+                }
             } else if (data.type === 'action') {
-                if (data.button === 'B') player.actionBlink = 15;
+                if (data.button === 'B') {
+                    player.actionBlink = 15;
+                    markGameDirty(code);
+                }
             }
         }
     });
@@ -301,10 +347,12 @@ io.on('connection', (socket) => {
                                     // Sinon, on ajuste la difficulté pour ceux qui restent
                                     gameLogic.adjustDifficulty(games[code].level, currentPlayersCount);
                                     io.to(code).emit('stateUpdate', games[code]);
+                                    markGameDirty(code);
                                     console.log(`Game ${code} dynamically adjusted for ${currentPlayersCount} players.`);
                                 }
                             } else {
                                 io.to(code).emit('stateUpdate', games[code]);
+                                markGameDirty(code);
                             }
                         }
                     }, 10000); // 10000 millisecondes = 10 secondes
@@ -335,6 +383,7 @@ setInterval(() => {
         gameLogic.updateTriggers(gameState.players, gameState.level);
 
         if (gameState.status === 'playing') {
+            const prevStatus = gameState.status;
             if (gameLogic.checkWinCondition(gameState.players, gameState.level)) {
                 gameState.status = 'victory';
             } else {
@@ -344,30 +393,27 @@ setInterval(() => {
                     gameState.status = 'defeat';
                 }
             }
+            if (gameState.status !== prevStatus) {
+                stateChanged = true;
+            }
         }
 
-        // Optimisation : On n'envoie que les données dynamiques au tick
-        const dynamicLevel = gameState.level ? {
-            buttons: gameState.level.buttons,
-            doors: gameState.level.doors,
-            coins: gameState.level.coins,
-            hearts: gameState.level.hearts,
-            traps: gameState.level.traps,
-            exit: gameState.level.exit,
-            quests: gameState.level.quests,
-            sequenceIndex: gameState.level.sequenceIndex,
-            sequenceButtons: gameState.level.sequenceButtons
-        } : null;
+        if (stateChanged) {
+            gameState.netDirty = true;
+        }
 
-        const dynamicState = {
-            status: gameState.status,
-            timeLeft: gameState.timeLeft,
-            countdown: gameState.countdown,
-            players: gameState.players,
-            level: dynamicLevel
-        };
+        gameState.netElapsed += TICK_RATE;
+        gameState.netForceElapsed += TICK_RATE;
 
-        io.to(code).emit('stateUpdate', dynamicState);
+        if (gameState.netElapsed >= NETWORK_TICK_RATE) {
+            const shouldEmit = gameState.netDirty || gameState.netForceElapsed >= FORCE_SYNC_RATE;
+            if (shouldEmit) {
+                io.to(code).emit('stateUpdate', buildDynamicState(gameState));
+                gameState.netDirty = false;
+                gameState.netForceElapsed = 0;
+            }
+            gameState.netElapsed = 0;
+        }
     }
 }, TICK_RATE);
 
@@ -378,16 +424,20 @@ setInterval(() => {
         if (gameState.status === 'starting') {
             if (gameState.countdown > 0) {
                 gameState.countdown--;
+                gameState.netDirty = true;
             }
             if (gameState.countdown <= 0) {
                 gameLogic.assignerSpawnsJoueurs(gameState.level, gameState.players);
                 gameState.status = 'playing';
                 gameState.timeLeft = 300;
+                gameState.netDirty = true;
             }
         } else if (gameState.status === 'playing') {
             gameState.timeLeft--;
+            gameState.netDirty = true;
             if (gameState.timeLeft <= 0) {
                 gameState.status = 'defeat';
+                gameState.netDirty = true;
             }
         }
     }
