@@ -117,7 +117,7 @@ function emitDeltaTick(gameCode) {
         _compressed: true,
         _delta: true
     };
-    io.volatile.to(gameState.hostSocketId).emit('stateUpdate', payload);
+    io.volatile.to(gameCode).emit('stateUpdate', payload);
     return true;
 }
 
@@ -487,7 +487,7 @@ setInterval(() => {
                     delete games[code];
                     continue;
                 }
-                
+
                 const noAlivePlayers = playerList.length > 0 && playerList.every(p => p.isDead);
                 if (noAlivePlayers) gameState.status = 'defeat';
             }

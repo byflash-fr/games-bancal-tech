@@ -18,10 +18,11 @@
         <button class="btn btn-error" onclick="window.location.href='/'" style="width: auto; padding-left: 60px; padding-right: 60px;">Quitter</button>
     </div>
 
-    <div id="reveal-ui" style="display: none;">
-        <h2 style="color: var(--text-muted);">Ton Personnage</h2>
+    <div id="reveal-ui" class="flex-center" style="display: none; flex-direction: column; height: 100vh; text-align: center; background: #0f0f1b;">
+        <h2 style="color: var(--text-muted); font-size: 1rem; margin-bottom: 5px;">Ton Personnage</h2>
         <canvas id="character-canvas" width="240" height="240"></canvas>
-        <h1 id="reveal-countdown">5</h1>
+        <h1 id="reveal-countdown" style="font-size: 4rem; margin: 10px 0;">5</h1>
+        <button class="btn btn-error" onclick="window.location.href='/'" style="width: auto; padding: 8px 30px; font-size: 0.9rem;">Quitter</button>
     </div>
 
     <div id="controller-ui" style="display: none; flex-direction: column; height: 100vh;">

@@ -929,15 +929,15 @@ function draw() {
     const cy = Math.floor(canvas.height / 2);
 
     const pIds = Object.keys(players);
-    
+
     // ── ÉCRAN DE RÉVÉLATION (COUNTDOWN) ──────────────────────────────────
     if (gameState.status === 'starting') {
         // Fond plein pour cacher la carte
-        ctx.fillStyle = '#0f0f1b'; 
+        ctx.fillStyle = '#0f0f1b';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         // Effet de lumière central
-        const grad = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 0, canvas.width/2, canvas.height/2, Math.max(canvas.width, canvas.height));
+        const grad = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, 0, canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height));
         grad.addColorStop(0, '#1a1a2e');
         grad.addColorStop(1, '#0f0f1b');
         ctx.fillStyle = grad;
