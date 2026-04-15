@@ -130,6 +130,17 @@ socket.on('stateUpdate', (state) => {
             let secs = state.timeLeft % 60;
             mt.innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
         }
+
+        // Mise à jour de la vie (HP)
+        const hpDisplay = document.getElementById('hp-display');
+        if (myPlayer && hpDisplay) {
+            if (myPlayer.isDead) {
+                hpDisplay.innerHTML = '<span style="color: #e74c3c; font-weight: bold;">MORT</span>';
+            } else {
+                const maxHp = 2; // Maximum de vie configurable
+                hpDisplay.innerHTML = '❤️'.repeat(myPlayer.hp) + '🖤'.repeat(maxHp - myPlayer.hp);
+            }
+        }
     }
 
     lastState = state.status;

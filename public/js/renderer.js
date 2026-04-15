@@ -366,19 +366,8 @@ function drawPlayer(p) {
         ctx.globalAlpha = (Math.floor(Date.now() / 100) % 2 === 0) ? 0.35 : 1.0;
     }
 
-    // Pseudo
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 22px Arial'; ctx.textAlign = 'center';
-    ctx.lineWidth = 4; ctx.strokeStyle = '#000';
-    ctx.strokeText(p.pseudo, 0, -42); ctx.fillText(p.pseudo, 0, -42);
+    // Pseudo et HP déportés sur mobile (immersion)
 
-    // HP ou MORT
-    if (!p.isDead) {
-        ctx.font = '14px Arial';
-        ctx.fillText('❤️'.repeat(p.hp) + '🖤'.repeat(2 - p.hp), 0, -26);
-    } else {
-        ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 14px Arial';
-        ctx.fillText('MORT', 0, -26);
-    }
 
     // --- RENDU DU SPRITE BILLE ---
     const coloredCanvas = getColoredBille(p.color);
