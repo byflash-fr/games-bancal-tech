@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="fr">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -7,27 +8,28 @@
     <link rel="stylesheet" href="/css/style.css">
     <script src="https://cloud.byflash.fr/kilez.js"></script>
 </head>
+
 <body class="mobile-bg">
-    <div id="waiting-ui" class="flex-center animate-fade-in" style="flex-direction: column; height: 100vh; text-align: center; padding: 20px;">
-        <h1 style="font-size: 1.5rem; margin-bottom: 5px;">En attente...</h1>
-        <div id="lobby-preview" style="margin: 20px 0; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1);">
-            <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 10px;">Ton Personnage</p>
-            <canvas id="lobby-char-canvas" width="160" height="160" style="display: block;"></canvas>
-        </div>
-        <p style="font-size: 0.9rem; margin-bottom: 20px;">Préparez-vous, la partie va bientôt commencer.</p>
-        <button class="btn btn-error" onclick="window.location.href='/'" style="width: auto; padding-left: 60px; padding-right: 60px;">Quitter</button>
+    <div id="waiting-ui" class="flex-center animate-fade-in" style="display: flex; flex-direction: column; height: 100vh; text-align: center; padding: 20px;">
+        <h1 style="font-size: 1.6rem; color: #f1c40f; margin-bottom: 10px;">Préparez-vous !</h1>
+        <p style="font-size: 1.1rem; margin-bottom: 20px; color: #fff;">La partie va bientôt commencer.</p>
+        
+        <button class="btn btn-error" onclick="window.location.href='/'" style="width: auto; padding: 12px 60px;">Quitter</button>
     </div>
 
-    <div id="reveal-ui" class="flex-center" style="display: none; flex-direction: column; height: 100vh; text-align: center; background: #0f0f1b;">
+    <div id="reveal-ui" class="flex-center"
+        style="display: none; flex-direction: column; height: 100vh; text-align: center; background: #0f0f1b;">
         <h2 style="color: var(--text-muted); font-size: 1rem; margin-bottom: 5px;">Ton Personnage</h2>
         <canvas id="character-canvas" width="240" height="240"></canvas>
         <h1 id="reveal-countdown" style="font-size: 4rem; margin: 10px 0;">5</h1>
-        <button class="btn btn-error" onclick="window.location.href='/'" style="width: auto; padding: 8px 30px; font-size: 0.9rem;">Quitter</button>
+        <button class="btn btn-error" onclick="window.location.href='/'"
+            style="width: auto; padding: 8px 30px; font-size: 0.9rem;">Quitter</button>
     </div>
 
     <div id="controller-ui" style="display: none; flex-direction: column; height: 100vh;">
         <div class="mobile-header">
-            <button class="btn btn-outline" onclick="quitGame()" style="width: auto; padding: 8px 16px; margin: 0; font-size: 0.8rem;">Quitter</button>
+            <button class="btn btn-outline" onclick="quitGame()"
+                style="width: auto; padding: 8px 16px; margin: 0; font-size: 0.8rem;">Quitter</button>
             <div id="hp-display" style="font-size: 24px; pointer-events: none;"></div>
             <div id="mobile-timer">--:--</div>
         </div>
@@ -38,12 +40,12 @@
             <button id="btnB" class="game-btn" style="background: #3498db;">Signal</button>
         </div>
     </div>
-    
+
     <script src="/js/modal.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/controller.js"></script>
     <script src="https://cloud.byflash.fr/affenbrotbaum.js"></script>
     <script>logConnection('game-bancal');</script>
 </body>
-</html>
 
+</html>

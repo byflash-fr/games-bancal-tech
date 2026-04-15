@@ -107,10 +107,6 @@ socket.on('stateUpdate', (state) => {
     if (state.status === 'lobby' || state.status === 'victory' || state.status === 'defeat') {
         if (state.status === 'lobby') {
             waitingUI.style.display = 'flex';
-            if (myPlayer) {
-                const lobbyCanvas = document.getElementById('lobby-char-canvas');
-                drawCharacter(myPlayer, lobbyCanvas);
-            }
         }
         revealUI.style.display = 'none';
         controllerUI.style.display = 'none';

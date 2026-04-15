@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="fr">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,7 +7,6 @@
     <link rel="stylesheet" href="/css/style.css">
     <script src="https://cloud.byflash.fr/kilez.js"></script>
 </head>
-
 <body class="server-bg">
     <div id="ui-container">
         <h1>Bancal</h1>
@@ -36,8 +34,7 @@
                 <img id="qr-code-img" src="" alt="QR Code" style="width: 250px; height: 250px; display: none;" />
             </div>
 
-            <div id="preview-section"
-                style="display: none; flex-direction: column; align-items: center; margin-top: 20px;">
+            <div id="preview-section" style="display: none; flex-direction: column; align-items: center; margin-top: 20px;">
                 <h3 style="margin-bottom: 10px; color: var(--text-secondary);">Ta Bille</h3>
                 <canvas id="my-bille-preview" width="160" height="160"></canvas>
             </div>
@@ -62,8 +59,7 @@
     </div>
 
     <!-- VICTORY UI -->
-    <div id="victory-ui" class="lobby-container flex-center"
-        style="display: none; flex-direction: column; background: none; border: none; box-shadow: none;">
+    <div id="victory-ui" class="lobby-container flex-center" style="display: none; flex-direction: column; background: none; border: none; box-shadow: none;">
         <div class="lobby-buttons" style="margin-top: 160px;">
             <button class="btn btn-primary" onclick="startGame()">Recommencer</button>
             <button class="btn btn-outline" onclick="cancelGame()">Quitter</button>
@@ -71,8 +67,7 @@
     </div>
 
     <!-- DEFEAT UI -->
-    <div id="defeat-ui" class="lobby-container flex-center"
-        style="display: none; flex-direction: column; background: none; border: none; box-shadow: none;">
+    <div id="defeat-ui" class="lobby-container flex-center" style="display: none; flex-direction: column; background: none; border: none; box-shadow: none;">
         <div class="lobby-buttons" style="margin-top: 160px;">
             <button class="btn btn-primary" onclick="returnToLobby()">Retour au lobby</button>
         </div>
@@ -87,5 +82,4 @@
     <script src="https://cloud.byflash.fr/affenbrotbaum.js"></script>
     <script>logConnection('game-bancal');</script>
 </body>
-
 </html>
