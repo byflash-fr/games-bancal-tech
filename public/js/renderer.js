@@ -781,6 +781,7 @@
                     Object.assign(targetPlayers[id], newState.players[id]);
                 }
             }
+            /*
             // Supprime les joueurs partis
             for (const id in targetPlayers) {
                 if (!newState.players[id]) {
@@ -788,6 +789,7 @@
                     delete gameState.players[id];
                 }
             }
+            */
 
             if (newState.level && gameState.level) {
                 Object.assign(gameState.level, newState.level);
