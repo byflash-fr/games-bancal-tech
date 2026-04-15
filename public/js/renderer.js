@@ -41,6 +41,26 @@ walkingSound.volume = 0.4;
 
 const coinImg = new Image();
 coinImg.src = '/assets/images/piece.png';
+const COIN_FALLBACK_FRAMES = 10;
+const COIN_FRAME_DURATION = 90;
+const COIN_BASE_SIZE = 34;
+const coinSprite = {
+    ready: false,
+    frameCount: COIN_FALLBACK_FRAMES,
+    frameWidth: 0,
+    frameHeight: 0
+};
+
+coinImg.onload = () => {
+    const spriteHeight = coinImg.height;
+    const guessedFrameCount = Math.round(coinImg.width / spriteHeight);
+    const hasSquareFrames = guessedFrameCount > 0 && Math.abs((coinImg.width / guessedFrameCount) - spriteHeight) < 1;
+
+    coinSprite.frameCount = hasSquareFrames ? guessedFrameCount : COIN_FALLBACK_FRAMES;
+    coinSprite.frameWidth = coinImg.width / coinSprite.frameCount;
+    coinSprite.frameHeight = coinImg.height;
+    coinSprite.ready = true;
+};
 
 const feuilleImg = new Image();
 feuilleImg.src = '/assets/image/feuille.png';
@@ -335,15 +355,39 @@ function draw() {
         }
     }
 
-    let frameIndex = Math.floor(Date.now() / 100) % 10; // 10 frames d'animation pour la pièce
+    const now = Date.now();
     for(let c of gameState.level.coins) {
         if(!c.collected) {
-            if (coinImg.complete && coinImg.width > 0) {
-                let frameW = coinImg.width / 10; // On divise l'image par les 10 frames
-                let frameH = coinImg.height;
-                let drawW = 32; // Taille d'affichage
-                let drawH = 32;
-                ctx.drawImage(coinImg, frameIndex * frameW, 0, frameW, frameH, c.x - drawW/2, c.y - drawH/2, drawW, drawH);
+            if (coinSprite.ready && coinImg.complete && coinImg.width > 0) {
+                // Desynchronise chaque pièce pour éviter un rendu "robotique"
+                const phase = (c.x * 0.013) + (c.y * 0.017);
+                const frameIndex = Math.floor((now + phase * 150) / COIN_FRAME_DURATION) % coinSprite.frameCount;
+                const bobOffset = Math.sin(now * 0.006 + phase) * 3;
+                const pulseScale = 1 + Math.sin(now * 0.01 + phase) * 0.08;
+                const drawW = COIN_BASE_SIZE * pulseScale;
+                const drawH = COIN_BASE_SIZE * pulseScale;
+                const drawX = c.x - drawW / 2;
+                const drawY = c.y - drawH / 2 + bobOffset;
+
+                ctx.save();
+                ctx.globalAlpha = 0.35 + Math.sin(now * 0.008 + phase) * 0.1;
+                ctx.fillStyle = '#f1c40f';
+                ctx.beginPath();
+                ctx.arc(c.x, c.y + bobOffset, 20 * pulseScale, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+
+                ctx.drawImage(
+                    coinImg,
+                    frameIndex * coinSprite.frameWidth,
+                    0,
+                    coinSprite.frameWidth,
+                    coinSprite.frameHeight,
+                    drawX,
+                    drawY,
+                    drawW,
+                    drawH
+                );
             } else {
                 // Fallback de sécurité si l'image n'est pas encore chargée
                 ctx.fillStyle = '#f1c40f';
