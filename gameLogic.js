@@ -334,7 +334,7 @@ function checkWallCollision(p, level) {
 function applyPhysics(player, level) {
     if (player.isDead) return;
     if (player.invuln > 0) player.invuln--;
-    const SPEED = 5;
+    const SPEED = 3;
     let newX = player.x + player.vx * SPEED;
     const oldX = player.x;
     player.x = newX;
