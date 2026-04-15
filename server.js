@@ -70,7 +70,7 @@ function normalizePseudo(rawPseudo, fallback) {
     return cleaned || fallback;
 }
 
-const TICK_RATE = 1000 / 30;// 60 FPS
+const TICK_RATE = 1000 / 1;// 60 FPS
 
 io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
@@ -182,10 +182,16 @@ io.on('connection', (socket) => {
         const code = socket.gameCode;
         if(code && games[code]) {
             const game = games[code];
+            const playerCount = Object.keys(game.players).length;
+
+            if (playerCount < 2) {
+                return;
+            }
+
             if (game.status === 'lobby' || game.status === 'defeat' || game.status === 'victory') {
                 game.status = 'starting';
                 game.countdown = 5;
-                game.level = gameLogic.generateLevel(Math.max(1, Object.keys(game.players).length));
+                game.level = gameLogic.generateLevel(playerCount);
                 io.to(code).emit('stateUpdate', game);
             }
         }
