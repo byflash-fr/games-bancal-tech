@@ -13,7 +13,7 @@ window.addEventListener('resize', () => {
 const urlParams = new URLSearchParams(window.location.search);
 const pseudo = urlParams.get('pseudo') || 'Host';
 
-let gameState = { players: {}, level: null };
+let gameState = { players: {}, level: null, status: 'lobby' }; // Ajout du statut par défaut
 
 socket.emit('createGame', { pseudo }, (response) => {
     if(response.success) {
@@ -60,16 +60,14 @@ textures.sortie.src = '/assets/images/sortie.png';
 
 // --- Utilitaires de rendu 2D (Extrait de la logique Tilemap) ---
 
-// 1. Dessine une texture en mosaïque, alignée sur la grille du monde (zéro déformation)
 function drawWorldTiled(ctx, img, x, y, w, h, tileSize) {
     if (!img.complete || img.width === 0) return false;
     
     ctx.save();
     ctx.beginPath();
     ctx.rect(x, y, w, h);
-    ctx.clip(); // Restreint le dessin à l'intérieur de la zone
+    ctx.clip(); 
     
-    // Aligner le départ sur la grille absolue pour une texture "seamless" (sans coupure)
     let startX = Math.floor(x / tileSize) * tileSize;
     let startY = Math.floor(y / tileSize) * tileSize;
     
@@ -82,10 +80,8 @@ function drawWorldTiled(ctx, img, x, y, w, h, tileSize) {
     return true;
 }
 
-// 2. Dessine un sprite animé centré (Pièces, Sortie)
 function drawAnimatedCenter(ctx, img, cx, cy, drawSize, speedMs) {
     if (!img.complete || img.width === 0) return false;
-    // Déduit le nombre de frames via le ratio de l'image (ex: 320x32 = 10 frames)
     let frames = Math.max(1, Math.floor(img.width / img.height));
     let frameIndex = Math.floor(Date.now() / speedMs) % frames;
     let frameW = img.width / frames;
@@ -95,7 +91,6 @@ function drawAnimatedCenter(ctx, img, cx, cy, drawSize, speedMs) {
     return true;
 }
 
-// 3. Dessine les pièges proprement alignés
 function drawTrapTexture(ctx, img, x, y, w, h, isHorizontal) {
     if (!img.complete || img.width === 0) return false;
     ctx.save();
@@ -109,12 +104,12 @@ function drawTrapTexture(ctx, img, x, y, w, h, isHorizontal) {
     let frameH = img.height;
     
     if (isHorizontal) {
-        let size = h; // La largeur de la texture s'adapte à la hauteur du piège
+        let size = h; 
         for (let i = 0; i < w; i += size) {
             ctx.drawImage(img, frameIndex * frameW, 0, frameW, frameH, x + i, y, size, size);
         }
     } else {
-        let size = w; // La hauteur de la texture s'adapte à la largeur du piège
+        let size = w; 
         for (let j = 0; j < h; j += size) {
             ctx.drawImage(img, frameIndex * frameW, 0, frameW, frameH, x, y + j, size, size);
         }
@@ -122,7 +117,6 @@ function drawTrapTexture(ctx, img, x, y, w, h, isHorizontal) {
     ctx.restore();
     return true;
 }
-
 
 // --- Fonctions Audio ---
 function tryPlayBackgroundMusic() {
@@ -156,6 +150,42 @@ tryPlayBackgroundMusic();
 document.addEventListener('pointerdown', unlockMusicOnFirstInteraction, { passive: true });
 document.addEventListener('keydown', unlockMusicOnFirstInteraction);
 document.addEventListener('touchstart', unlockMusicOnFirstInteraction, { passive: true });
+
+
+// ── GESTION DES ÉTATS (Mise à jour de l'UI LOBBY) ────────────────────────
+socket.on('stateUpdate', (state) => {
+    gameState = state;
+    
+    if (state.status === 'lobby' || state.status === 'defeat') {
+        if (lobbyUI) lobbyUI.style.display = 'flex';
+        if (victoryUI) victoryUI.style.display = 'none';
+        if (pCountSpan) pCountSpan.innerText = Object.keys(state.players).length;
+
+        if (gameCodeDisplay) gameCodeDisplay.innerText = state.code;
+        
+        if (playersList) {
+            playersList.innerHTML = '';
+            for(let id in state.players) {
+                let p = state.players[id];
+                playersList.innerHTML += `<li style="margin-bottom: 10px; display: flex; align-items: center;"><span style="display:inline-block; width:20px; height:20px; background:${p.color}; border-radius:50%; margin-right:15px; border:2px solid white;"></span>${p.pseudo}</li>`;
+            }
+        }
+        
+        if (state.qrCodeDataUrl && qrCodeImg.src !== state.qrCodeDataUrl) {
+            joinUrlText.innerText = state.joinUrl;
+            qrCodeImg.src = state.qrCodeDataUrl;
+            qrCodeImg.style.display = 'block';
+        }
+    } else if (state.status === 'victory') {
+        if (lobbyUI) lobbyUI.style.display = 'none';
+        if (victoryUI) victoryUI.style.display = 'flex';
+    } else {
+        // En jeu, ou démarrage
+        if (lobbyUI) lobbyUI.style.display = 'none';
+        if (victoryUI) victoryUI.style.display = 'none';
+    }
+});
+
 
 function getIntersection(ray, segment) {
     const r_px = ray.a.x, r_py = ray.a.y;
@@ -212,13 +242,13 @@ function calculateVisibilityPolygon(origin, segments) {
     return intersects;
 }
 
-
-function startGame() {
+// Rendu global accessible via la page
+window.startGame = function() {
     tryPlayBackgroundMusic();
     socket.emit('startGame');
 }
 
-function cancelGame() {
+window.cancelGame = function() {
     socket.emit('cancelGame');
 }
 
@@ -241,6 +271,7 @@ function draw() {
     ctx.fillStyle = '#1e1e24';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
+    // Si la partie n'est pas commencée ou s'il n'y a pas de niveau, on stoppe l'animation et on dessine juste le fond
     if(!gameState.level || gameState.status === 'lobby') {
         stopWalkingSound();
         requestAnimationFrame(draw);
@@ -297,7 +328,7 @@ function draw() {
     // ── 1. LE SOL (Herbe) ────────────────────────────────
     if (gameState.level.rooms) {
         const roomColors = {
-            A: 'rgba(46, 204, 113, 0.15)', // Légère teinte pour différencier les zones
+            A: 'rgba(46, 204, 113, 0.15)',
             B: 'rgba(52, 152, 219, 0.15)',  
             C: 'rgba(230, 126, 34, 0.15)',  
             D: 'rgba(231, 76, 60, 0.15)'    
@@ -305,10 +336,8 @@ function draw() {
         const roomLabels = { A: '🏠 SPAWN', B: '🔵 TAMPON', C: '🟠 VERROU', D: '🚪 SORTIE' };
         
         for (const [key, room] of Object.entries(gameState.level.rooms)) {
-            // Dessin de l'herbe pavée
             let hasTexture = drawWorldTiled(ctx, textures.herbe, room.x, room.y, room.w, room.h, 64);
             
-            // Teinte par-dessus et texte
             ctx.fillStyle = hasTexture ? roomColors[key] : roomColors[key].replace('0.15', '0.07');
             ctx.fillRect(room.x, room.y, room.w, room.h);
             ctx.fillStyle = roomColors[key].replace('0.15', '0.4');
@@ -325,7 +354,7 @@ function draw() {
         ctx.shadowColor = '#2ecc71';
         ctx.shadowBlur  = 30;
     } else {
-        ctx.globalAlpha = 0.5; // Grisée si inactive
+        ctx.globalAlpha = 0.5;
     }
     
     let isExitDrawn = drawAnimatedCenter(ctx, textures.sortie, gameState.level.exit.x, gameState.level.exit.y, exitR * 2.5, 150);
@@ -462,7 +491,6 @@ function draw() {
         
         let hasTex = drawWorldTiled(ctx, textures.feuille, w.x, w.y, w.w, w.h, 64);
         
-        // Assombrissement pour garder le côté "Labyrinthe"
         ctx.fillStyle = hasTex ? (isMaze ? 'rgba(42, 42, 58, 0.4)' : 'rgba(13, 13, 20, 0.4)') : (isMaze ? '#2a2a3a' : '#0d0d14');
         ctx.fillRect(w.x, w.y, w.w, w.h);
         
