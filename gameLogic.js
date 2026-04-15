@@ -1,6 +1,7 @@
 // ── Constantes ──────────────────────────────────────────────
 const PLAYER_R = 20;  // rayon du joueur
 const WALL_T = 40;    // taille d'un bloc (tile) de mur / épaisseur
+const TILE = 40;      // taille d'une tuile monde
 const SAFE_R = 120;   // rayon de dégagement (pour compatibilité)
 
 function getDist(p1, p2) { return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2)); }
@@ -123,7 +124,6 @@ function generateLevel(playerCount) {
     // Taille dépendante du nombre de joueurs (logique gen.js)
     const tailleH = 12 + (playerCount * 2);
     const tailleL = largeurCalculée(tailleH);
-    const TILE = 40; // Taille d'une case sur l'écran (alignée sur le rendu)
 
     let matrice = [];
     for (let y = 0; y < tailleH; y++) {
@@ -442,4 +442,46 @@ function adjustDifficulty(level, newPlayerCount) {
     if (qBtn2 && !qBtn2.done) qBtn2.text = `Activer la plaque Verrou (${level.buttons.find(b=>b.id===2).reqCount} j.)`;
 }
 
-module.exports = { generateLevel, applyPhysics, updateTriggers, checkWinCondition, adjustDifficulty };
+function assignerSpawnsJoueurs(level, players) {
+    const pIds = Object.keys(players);
+    const matrice = level.geometrie;
+    if (!matrice) return;
+    
+    let startC = Math.floor(level.spawnX / TILE);
+    let startR = Math.floor(level.spawnY / TILE);
+    
+    let casesLibres = [];
+    const ID_SOL = 1;
+    const ID_DEPART = 3;
+    
+    for (let r = startR - 2; r <= startR + 2; r++) {
+        for (let c = startC - 2; c <= startC + 2; c++) {
+            if (r >= 0 && r < matrice.length && c >= 0 && c < matrice[0].length) {
+                if (matrice[r][c] === ID_SOL || matrice[r][c] === ID_DEPART) {
+                    casesLibres.push({ r: r, c: c });
+                }
+            }
+        }
+    }
+    
+    casesLibres.sort(() => Math.random() - 0.5);
+    
+    pIds.forEach((id, index) => {
+        const player = players[id];
+        if (index < casesLibres.length) {
+            let caseSpawn = casesLibres[index];
+            player.x = (caseSpawn.c * TILE) + (TILE / 2);
+            player.y = (caseSpawn.r * TILE) + (TILE / 2);
+        } else {
+            player.x = level.spawnX;
+            player.y = level.spawnY;
+        }
+        player.vx = 0;
+        player.vy = 0;
+        player.isDead = false;
+        player.hp = 2;
+        player.invuln = 0;
+    });
+}
+
+module.exports = { generateLevel, applyPhysics, updateTriggers, checkWinCondition, adjustDifficulty, assignerSpawnsJoueurs };

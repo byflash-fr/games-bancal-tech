@@ -328,6 +328,7 @@ setInterval(() => {
                 gameState.countdown--;
             }
             if (gameState.countdown <= 0) {
+                gameLogic.assignerSpawnsJoueurs(gameState.level, gameState.players);
                 gameState.status = 'playing';
                 gameState.timeLeft = 300;
             }
