@@ -36,55 +36,69 @@ const revealCountdown = document.getElementById('reveal-countdown');
 let hasRevealed = false;
 let lastState = 'lobby';
 
+const billeImg = new Image();
+billeImg.src = '/assets/images/bille.png';
+const coloredBilleCache = {};
+
+function getColoredBille(hexColor) {
+    if (coloredBilleCache[hexColor]) return coloredBilleCache[hexColor];
+    if (!billeImg.complete || billeImg.naturalWidth === 0) return null;
+
+    const buffer = document.createElement('canvas');
+    buffer.width = billeImg.naturalWidth;
+    buffer.height = billeImg.naturalHeight;
+    const bctx = buffer.getContext('2d');
+    bctx.drawImage(billeImg, 0, 0);
+    bctx.globalCompositeOperation = "source-in";
+    bctx.fillStyle = hexColor;
+    bctx.fillRect(0, 0, buffer.width, buffer.height);
+    bctx.globalCompositeOperation = "multiply";
+    bctx.drawImage(billeImg, 0, 0);
+    coloredBilleCache[hexColor] = buffer;
+    return buffer;
+}
+
 function drawCharacter(player) {
     if (!charCanvas) return;
     const ctx = charCanvas.getContext('2d');
     ctx.clearRect(0, 0, charCanvas.width, charCanvas.height);
-    ctx.save();
-    ctx.translate(charCanvas.width / 2, charCanvas.height / 2);
-    ctx.scale(2.5, 2.5);
     
-    ctx.fillStyle = player.color;
-    
-    if (player.shape === 'square') {
-        ctx.fillRect(-20, -20, 40, 40);
-    } else if (player.shape === 'triangle') {
+    const coloredBille = getColoredBille(player.color);
+    if (coloredBille) {
+        ctx.save();
+        ctx.translate(charCanvas.width / 2, charCanvas.height / 2);
+        const fw = coloredBille.width / 20; // 20 frames
+        const size = 180;
+        ctx.drawImage(coloredBille, 0, 0, fw, coloredBille.naturalHeight, -size/2, -size/2, size, size);
+        
+        // Yeux stylisés
+        ctx.fillStyle = '#111';
         ctx.beginPath();
-        ctx.moveTo(0, -20);
-        ctx.lineTo(20, 20);
-        ctx.lineTo(-20, 20);
-        ctx.closePath();
+        ctx.arc(-24, -16, 12, 0, Math.PI*2);
+        ctx.arc(24, -16, 12, 0, Math.PI*2);
         ctx.fill();
-    } else if (player.shape === 'cross') {
-        ctx.fillRect(-20, -6, 40, 12);
-        ctx.fillRect(-6, -20, 12, 40);
-    } else if (player.shape === 'circle') {
+        ctx.strokeStyle = '#111';
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.arc(0, 20, 24, 0.2, Math.PI - 0.2);
+        ctx.stroke();
+        ctx.restore();
+    } else {
+        // Fallback
+        ctx.save();
+        ctx.translate(charCanvas.width / 2, charCanvas.height / 2);
+        ctx.scale(2.5, 2.5);
+        ctx.fillStyle = player.color;
         ctx.beginPath();
         ctx.arc(0, 0, 20, 0, Math.PI*2);
         ctx.fill();
-    } else if (player.shape === 'star') {
+        ctx.fillStyle = '#111';
         ctx.beginPath();
-        for(let i=0; i<5; i++) {
-            ctx.lineTo(Math.cos((18+i*72)/180*Math.PI)*20, -Math.sin((18+i*72)/180*Math.PI)*20);
-            ctx.lineTo(Math.cos((54+i*72)/180*Math.PI)*10, -Math.sin((54+i*72)/180*Math.PI)*10);
-        }
-        ctx.closePath();
+        ctx.arc(-6, -4, 3, 0, Math.PI*2);
+        ctx.arc(6, -4, 3, 0, Math.PI*2);
         ctx.fill();
+        ctx.restore();
     }
-
-    ctx.fillStyle = '#111';
-    ctx.beginPath();
-    ctx.arc(-6, -4, 3, 0, Math.PI*2);
-    ctx.arc(6, -4, 3, 0, Math.PI*2);
-    ctx.fill();
-    
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(0, 4, 6, 0.2, Math.PI - 0.2);
-    ctx.stroke();
-
-    ctx.restore();
 }
 
 socket.on('stateUpdate', (state) => {

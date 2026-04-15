@@ -49,6 +49,7 @@ loadImg('piece', '/assets/images/piece.png');
 loadImg('pikkux', '/assets/images/pikkux.png');
 loadImg('pikkuy', '/assets/images/pikkuy.png');
 loadImg('sortie', '/assets/images/sortie.png');
+loadImg('bille', '/assets/images/bille.png');
 
 // Sprites animés : { img, frames, speed(ms/frame) }
 const ANIM = {
@@ -56,7 +57,39 @@ const ANIM = {
     pikkux: { key: 'pikkux', frames: 4, speed: 120 },
     pikkuy: { key: 'pikkuy', frames: 4, speed: 120 },
     sortie: { key: 'sortie', frames: 9, speed: 150 },
+    bille: { key: 'bille', frames: 20, speed: 150 } 
 };
+
+// Cache pour ne pas recalculer les sprites colorés à chaque frame
+const coloredBilleCache = {};
+
+function getColoredBille(hexColor) {
+    if (coloredBilleCache[hexColor]) return coloredBilleCache[hexColor];
+    
+    const baseImg = RES['bille'];
+    if (!baseImg || !baseImg.complete || baseImg.naturalWidth === 0) return null;
+
+    const buffer = document.createElement('canvas');
+    buffer.width = baseImg.naturalWidth;
+    buffer.height = baseImg.naturalHeight;
+    const bctx = buffer.getContext('2d');
+
+    // 1. Dessiner l'image de base
+    bctx.drawImage(baseImg, 0, 0);
+
+    // 2. Appliquer la couleur par-dessus en mode "source-in" 
+    // (ne colorie que les pixels non transparents)
+    bctx.globalCompositeOperation = "source-in";
+    bctx.fillStyle = hexColor;
+    bctx.fillRect(0, 0, buffer.width, buffer.height);
+
+    // 3. Remettre l'image de base en mode "multiply" pour garder les ombres/contours noirs
+    bctx.globalCompositeOperation = "multiply";
+    bctx.drawImage(baseImg, 0, 0);
+
+    coloredBilleCache[hexColor] = buffer;
+    return buffer;
+}
 
 function drawSprite(anim, cx, cy, size) {
     const img = RES[anim.key];
@@ -337,25 +370,41 @@ function drawPlayer(p) {
         ctx.fillText('MORT', 0, -26);
     }
 
-    // Corps
-    ctx.fillStyle = p.color;
-    if (p.actionBlink > 0) { ctx.shadowColor = '#fff'; ctx.shadowBlur = Math.min(20, p.actionBlink * 3); }
-
-    const sh = p.shape;
-    if (sh === 'square') { ctx.fillRect(-20, -20, 40, 40); }
-    else if (sh === 'circle') { ctx.beginPath(); ctx.arc(0, 0, 20, 0, Math.PI * 2); ctx.fill(); }
-    else if (sh === 'triangle') { ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(20, 20); ctx.lineTo(-20, 20); ctx.closePath(); ctx.fill(); }
-    else if (sh === 'cross') { ctx.fillRect(-20, -6, 40, 12); ctx.fillRect(-6, -20, 12, 40); }
-    else if (sh === 'star') {
-        ctx.beginPath();
-        for (let i = 0; i < 5; i++) {
-            ctx.lineTo(Math.cos((18 + i * 72) / 180 * Math.PI) * 20, -Math.sin((18 + i * 72) / 180 * Math.PI) * 20);
-            ctx.lineTo(Math.cos((54 + i * 72) / 180 * Math.PI) * 10, -Math.sin((54 + i * 72) / 180 * Math.PI) * 10);
+    // --- RENDU DU SPRITE BILLE ---
+    const coloredCanvas = getColoredBille(p.color);
+    
+    if (coloredCanvas) {
+        // Animation : On utilise la vitesse du joueur pour animer la bille 
+        // Si vx et vy = 0, la frame reste fixe
+        const isMoving = (p.vx !== 0 || p.vy !== 0);
+        
+        let frameIndex = 0;
+        if (isMoving) {
+            frameIndex = Math.floor(Date.now() / ANIM.bille.speed) % ANIM.bille.frames;
         }
-        ctx.closePath(); ctx.fill();
+
+        const fw = coloredCanvas.width / ANIM.bille.frames;
+        const size = 40; // Taille d'affichage (Taille originale)
+
+        // Optionnel : Rotation basée sur la direction
+        if (isMoving) {
+            const angle = Math.atan2(p.vy, p.vx);
+            ctx.rotate(angle);
+        }
+
+        if (p.actionBlink > 0) {
+            ctx.shadowColor = '#fff';
+            ctx.shadowBlur = Math.min(20, p.actionBlink * 3);
+        }
+
+        ctx.drawImage(coloredCanvas, frameIndex * fw, 0, fw, coloredCanvas.height, -size/2, -size/2, size, size);
+    } else {
+        // Fallback si l'image n'est pas encore chargée
+        ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.arc(0, 0, 20, 0, Math.PI * 2); ctx.fill();
     }
 
-    // Yeux
+    // Yeux (Optionnel si la bille a déjà des yeux, mais on les garde pour le style)
     ctx.fillStyle = '#111'; ctx.shadowBlur = 0;
     ctx.beginPath(); ctx.arc(-6, -4, 3, 0, Math.PI * 2); ctx.arc(6, -4, 3, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = '#111'; ctx.lineWidth = 2;
@@ -616,8 +665,48 @@ socket.on('stateUpdate', (state) => {
             playersList.innerHTML = '';
             for (const id in state.players) {
                 const p = state.players[id];
-                playersList.innerHTML += `<li style="margin-bottom:10px;display:flex;align-items:center;">
-                  <span style="display:inline-block;width:20px;height:20px;background:${p.color};border-radius:50%;margin-right:15px;border:2px solid white;"></span>${p.pseudo}</li>`;
+                const coloredBille = getColoredBille(p.color);
+                let imgHtml = `<span style="display:inline-block;width:24px;height:24px;background:${p.color};border-radius:50%;margin-right:15px;border:2px solid white;"></span>`;
+                
+                if (coloredBille) {
+                    // Pour le lobby on va créer des petits canvas dynamiquement ou juste utiliser le fallback couleur si trop complexe
+                    // Ici on va injecter un canvas id pour le remplir après
+                    imgHtml = `<canvas id="bille-icon-${id}" width="40" height="40" style="width:30px;height:30px;margin-right:15px;image-rendering:pixelated;"></canvas>`;
+                }
+
+                playersList.innerHTML += `<li style="margin-bottom:12px;display:flex;align-items:center;font-size:1.2rem;font-weight:bold;">
+                  ${imgHtml}${p.pseudo}</li>`;
+                
+                if (coloredBille) {
+                    setTimeout(() => {
+                        const iconCanvas = document.getElementById(`bille-icon-${id}`);
+                        if (iconCanvas) {
+                            const ictx = iconCanvas.getContext('2d');
+                            ictx.imageSmoothingEnabled = false;
+                            const fw = coloredBille.width / ANIM.bille.frames;
+                            ictx.drawImage(coloredBille, 0, 0, fw, coloredBille.height, 0, 0, 40, 40);
+                        }
+                    }, 0);
+                }
+            }
+
+            // Preview pour "soi-même" si on est sur cet écran
+            const myPlayer = state.players[socket.id]; 
+            const previewSection = document.getElementById('preview-section');
+            if (myPlayer) {
+                if (previewSection) previewSection.style.display = 'flex';
+                const coloredBille = getColoredBille(myPlayer.color);
+                if (coloredBille) {
+                    const previewCanvas = document.getElementById('my-bille-preview');
+                    if (previewCanvas) {
+                        const pCtx = previewCanvas.getContext('2d');
+                        pCtx.clearRect(0,0,previewCanvas.width, previewCanvas.height);
+                        const fw = coloredBille.width / ANIM.bille.frames;
+                        pCtx.drawImage(coloredBille, 0, 0, fw, coloredBille.height, 0, 0, previewCanvas.width, previewCanvas.height);
+                    }
+                }
+            } else {
+                if (previewSection) previewSection.style.display = 'none';
             }
         }
         if (state.qrCodeDataUrl && qrCodeImg && qrCodeImg.src !== state.qrCodeDataUrl) {
