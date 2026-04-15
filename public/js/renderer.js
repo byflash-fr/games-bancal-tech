@@ -560,21 +560,12 @@ function drawCoin(c) {
 
 // ── Coeurs (soin) ───────────────────────────────────────────────────────
 function drawHeart(h) {
-    const img = RES['coeur'];
-    if (img && img.complete && img.naturalWidth > 0) {
-        const size = 34;
-        ctx.drawImage(img, h.x - size / 2, h.y - size / 2, size, size);
-        return;
-    }
-
-    // Fallback si l'asset n'est pas encore chargé
-    ctx.fillStyle = '#ff4d6d';
-    ctx.beginPath();
-    ctx.arc(h.x - 7, h.y - 4, 7, 0, Math.PI * 2);
-    ctx.arc(h.x + 7, h.y - 4, 7, 0, Math.PI * 2);
-    ctx.lineTo(h.x, h.y + 12);
-    ctx.closePath();
-    ctx.fill();
+    const time = Date.now() / 250;
+    const scale = 1 + Math.sin(time) * 0.15; // Animation de battement
+    ctx.font = `${Math.floor(24 * scale)}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('❤️', h.x, h.y + 4);
 }
 
 // ── Pièges (tiles animés) ─────────────────────────────────────────────
@@ -671,18 +662,18 @@ function drawHUD(state) {
 
 // ── États spéciaux (overlay) ──────────────────────────────────────────
 function drawOverlays(state) {
-    if (state.status === 'starting') {
-        ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#f1c40f'; ctx.font = 'bold 140px Arial'; ctx.textAlign = 'center';
-        ctx.fillText(state.countdown, canvas.width / 2, canvas.height / 2 + 50);
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 28px Arial';
-        ctx.fillText('Préparez-vous !', canvas.width / 2, canvas.height / 2 - 90);
-    } else if (state.status === 'defeat') {
-        ctx.fillStyle = 'rgba(180,30,30,0.82)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 80px Arial'; ctx.textAlign = 'center';
-        ctx.fillText('TEMPS ÉCOULÉ', canvas.width / 2, canvas.height / 2 - 20);
-        ctx.font = 'bold 32px Arial'; ctx.fillStyle = '#fca5a5';
-        ctx.fillText('ou tous morts…', canvas.width / 2, canvas.height / 2 + 50);
+    if (state.status === 'defeat') {
+        ctx.fillStyle = 'rgba(10,10,20,0.9)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ff4d6d'; ctx.font = 'bold 90px Arial'; ctx.textAlign = 'center';
+        ctx.fillText('DÉFAITE', canvas.width / 2, canvas.height / 2 - 10);
+        ctx.font = '22px Arial'; ctx.fillStyle = '#fff';
+        ctx.fillText('Fin de la partie', canvas.width / 2, canvas.height / 2 + 60);
+    } else if (state.status === 'victory') {
+        ctx.fillStyle = 'rgba(10,10,20,0.9)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#2ecc71'; ctx.font = 'bold 90px Arial'; ctx.textAlign = 'center';
+        ctx.fillText('VICTOIRE', canvas.width / 2, canvas.height / 2 - 10);
+        ctx.font = '22px Arial'; ctx.fillStyle = '#fff';
+        ctx.fillText('Fin de la partie', canvas.width / 2, canvas.height / 2 + 60);
     }
 }
 
@@ -938,8 +929,68 @@ function draw() {
     const cy = Math.floor(canvas.height / 2);
 
     const pIds = Object.keys(players);
+    
+    // ── ÉCRAN DE RÉVÉLATION (COUNTDOWN) ──────────────────────────────────
+    if (gameState.status === 'starting') {
+        // Fond plein pour cacher la carte
+        ctx.fillStyle = '#0f0f1b'; 
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Effet de lumière central
+        const grad = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 0, canvas.width/2, canvas.height/2, Math.max(canvas.width, canvas.height));
+        grad.addColorStop(0, '#1a1a2e');
+        grad.addColorStop(1, '#0f0f1b');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 30px Arial';
+        ctx.fillText("VOTRE PERSONNAGE", canvas.width / 2, 80);
+
+        // Compteur
+        ctx.font = 'bold 120px Arial';
+        ctx.fillStyle = '#f1c40f';
+        ctx.shadowColor = '#f39c12'; ctx.shadowBlur = 20;
+        ctx.fillText(Math.ceil(gameState.countdown), canvas.width / 2, canvas.height / 2 + 40);
+        ctx.shadowBlur = 0;
+
+        // Affichage des billes en grille
+        const pList = Object.values(players);
+        const displayCols = Math.min(pList.length, 6);
+        const cellW = 120;
+        const totalW = displayCols * cellW;
+        const startX = (canvas.width - totalW) / 2;
+
+        pList.forEach((p, i) => {
+            const col = i % displayCols;
+            const row = Math.floor(i / displayCols);
+            const px = startX + col * cellW + cellW / 2;
+            const py = canvas.height - 180 + row * 100;
+
+            // Dessin d'une petite plateforme
+            ctx.fillStyle = 'rgba(255,255,255,0.1)';
+            ctx.beginPath();
+            ctx.ellipse(px, py + 15, 30, 10, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Dessin de la bille (on détourne drawPlayer en simulant un contexte)
+            ctx.save();
+            ctx.translate(px, py - 10);
+            drawPlayer({ ...p, x: 0, y: 0, vx: 0, vy: 0, invuln: 0, actionBlink: 0 });
+            ctx.restore();
+
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 14px Arial';
+            ctx.fillText(p.pseudo, px, py + 45);
+        });
+
+        requestAnimationFrame(draw);
+        return;
+    }
+
     const moving = pIds.some(id => { const p = players[id]; return p.vx !== 0 || p.vy !== 0; });
-    if (status === 'playing' && moving) tryWalk(); else stopWalk();
+    if (gameState.status === 'playing' && moving) tryWalk(); else stopWalk();
 
     // ── Début du contexte monde ──────────────────────────────────────
     ctx.save();

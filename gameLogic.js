@@ -282,7 +282,7 @@ function generateLevel(playerCount) {
         }
     }
 
-    const coinGoal = level.coins.length;
+    const coinGoal = Math.max(1, Math.floor(level.coins.length / 2));
     level.quests = [
         { id: "btn1", text: `Activer la plaque Pont (${req1} j.)`, done: false },
         { id: "btn2", text: `Activer la plaque Verrou (${req2} j.)`, done: false },
@@ -442,8 +442,13 @@ function assignerSpawnsJoueurs(level, players) {
     const searchRadius = Math.ceil(Math.sqrt(pIds.length)) + 1;
     for (let r = sR - searchRadius; r <= sR + searchRadius; r++) {
         for (let c = sC - searchRadius; c <= sC + searchRadius; c++) {
-            if (r >= 0 && r < matrice.length && c >= 0 && c < matrice[0].length && (matrice[r][c] === 1 || matrice[r][c] === 3)) 
-                free.push({ r, c });
+            if (r >= 0 && r < matrice.length && c >= 0 && c < matrice[0].length && (matrice[r][c] === 1 || matrice[r][c] === 3)) {
+                const cx = c * TILE + TILE / 2, cy = r * TILE + TILE / 2;
+                // Vérifie qu'il n'y a pas de piège ou de coeur ici
+                const hasTrap = level.traps.find(t => Math.abs(t.x - cx) < 5 && Math.abs(t.y - cy) < 5);
+                const hasHeart = level.hearts.find(h => !h.collected && Math.abs(h.x - cx) < 5 && Math.abs(h.y - cy) < 5);
+                if (!hasTrap && !hasHeart) free.push({ r, c });
+            }
         }
     }
     
