@@ -455,9 +455,20 @@
             ctx.globalAlpha = (Math.floor(Date.now() / 100) % 2 === 0) ? 0.35 : 1.0;
         }
 
-        // Pseudo et HP déportés sur mobile (immersion)
-
-
+        // Pseudo au-dessus de la bille
+        ctx.save();
+        ctx.translate(0, -35);
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.font = 'bold 15px Arial';
+        const txt = p.pseudo || '...';
+        const tw = ctx.measureText(txt).width;
+        ctx.beginPath();
+        ctx.roundRect(-tw / 2 - 10, -12, tw + 20, 24, 12);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.fillText(txt, 0, 5);
+        ctx.restore();
         // --- RENDU DU SPRITE BILLE ---
         const coloredCanvas = getColoredBille(p.color);
 
@@ -625,30 +636,33 @@
 
         // Quêtes
         if (state.status === 'playing' && state.level?.quests) {
+            const panelWidth = 320;
+            const panelX = canvas.width - panelWidth - 20;
+            const qh = 50 + state.level.quests.length * 32;
+
             // Détecte si un joueur est sous le panneau
             let underUI = false;
             for (const id of pIds) {
                 const p = state.players[id];
                 const sx = (p.x - camera.x) * camera.scale + canvas.width / 2;
                 const sy = (p.y - camera.y) * camera.scale + canvas.height / 2;
-                if (sx > 10 && sx < 430 && sy > 52 && sy < 280) { underUI = true; break; }
+                if (sx > panelX && sx < canvas.width && sy > 52 && sy < 280) { underUI = true; break; }
             }
-            const alpha = underUI ? 0.15 : 0.82;
+            const alpha = underUI ? 0.2 : 0.85;
             ctx.globalAlpha = alpha;
             ctx.fillStyle = 'rgba(12,12,20,1)';
-            const qh = 50 + state.level.quests.length * 32;
-            ctx.beginPath(); ctx.roundRect(14, 64, 410, qh, 14); ctx.fill();
+            ctx.beginPath(); ctx.roundRect(panelX, 64, panelWidth, qh, 14); ctx.fill();
             ctx.strokeStyle = '#2ecc71'; ctx.lineWidth = 2; ctx.stroke();
             ctx.globalAlpha = 1;
 
-            ctx.globalAlpha = underUI ? 0.2 : 1.0;
+            ctx.globalAlpha = underUI ? 0.3 : 1.0;
             ctx.fillStyle = '#f1c40f'; ctx.font = 'bold 18px Arial'; ctx.textAlign = 'left';
-            ctx.fillText('🏆 Quêtes & Objectifs', 30, 94);
+            ctx.fillText('🏆 Missions', panelX + 20, 94);
             ctx.font = 'bold 14px Arial';
             let qy = 120;
             for (const q of state.level.quests) {
                 ctx.fillStyle = q.done ? '#2ecc71' : '#ccc';
-                ctx.fillText((q.done ? '✅ ' : '⬜ ') + q.text, 30, qy);
+                ctx.fillText((q.done ? '✅ ' : '⬜ ') + q.text, panelX + 20, qy);
                 qy += 30;
             }
             ctx.globalAlpha = 1.0;
