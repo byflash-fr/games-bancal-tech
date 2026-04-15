@@ -282,19 +282,19 @@ function generateLevel(playerCount) {
         label: 'UNLOCK'
     });
 
-    // ─ Pièces (coins) ─────────────────────────────────────────
-    const coinCount = Math.max(3, Math.min(10, playerCount * 2));
-    // Disperse les pièces dans toutes les salles
-    const roomList = ['A','B','C','D'];
-    for (let i = 0; i < coinCount; i++) {
-        const rKey = roomList[i % 4];
-        const r    = rooms[rKey];
-        level.coins.push({
-            x: r.x + margin + Math.random() * (r.w - margin * 2),
-            y: r.y + margin + Math.random() * (r.h - margin * 2),
-            collected: false
-        });
-    }
+    // // ─ Pièces (coins) ─────────────────────────────────────────
+    // const coinCount = Math.max(3, Math.min(10, playerCount * 2));
+    // // Disperse les pièces dans toutes les salles
+    // const roomList = ['A','B','C','D'];
+    // for (let i = 0; i < coinCount; i++) {
+    //     const rKey = roomList[i % 4];
+    //     const r    = rooms[rKey];
+    //     level.coins.push({
+    //         x: r.x + margin + Math.random() * (r.w - margin * 2),
+    //         y: r.y + margin + Math.random() * (r.h - margin * 2),
+    //         collected: false
+    //     });
+    // }
 
     // ─ Quêtes ─────────────────────────────────────────────────
     level.quests = [
@@ -359,6 +359,36 @@ function generateLevel(playerCount) {
 
     level.walls.push(...mazeA, ...mazeB, ...mazeC, ...mazeD);
 
+    // ─ Pièces (coins) SÉCURISÉES ─────────────────────────────────────────
+    const coinCount = Math.max(3, Math.min(10, playerCount * 2));
+    const roomList = ['A','B','C','D'];
+    
+    for (let i = 0; i < coinCount; i++) {
+        const rKey = roomList[i % 4];
+        const r = rooms[rKey];
+        let valid = false;
+        let attempts = 0;
+        let cx, cy;
+        
+        // On fait jusqu'à 50 tentatives pour trouver un endroit sans mur
+        while (!valid && attempts < 50) {
+            cx = r.x + margin + Math.random() * (r.w - margin * 2);
+            cy = r.y + margin + Math.random() * (r.h - margin * 2);
+            
+            // On utilise checkWallCollision en traitant la pièce comme un petit joueur pour éviter les murs
+            valid = !checkWallCollision({ x: cx, y: cy }, level.walls, level.doors);
+            attempts++;
+        }
+        
+        if (valid) {
+            level.coins.push({
+                x: cx,
+                y: cy,
+                collected: false
+            });
+        }
+    }
+
     return level;
 }
 
@@ -366,14 +396,34 @@ function generateLevel(playerCount) {
 //  Physique
 // ─────────────────────────────────────────────────────────────
 
+// function checkWallCollision(p, walls, doors) {
+//     const pr = PLAYER_R;
+//     const allObstacles = walls.concat(doors.filter(d => !d.open));
+
+//     for (let w of allObstacles) {
+//         const nearX = Math.max(w.x, Math.min(p.x, w.x + w.w));
+//         const nearY = Math.max(w.y, Math.min(p.y, w.y + w.h));
+//         const dx    = p.x - nearX, dy = p.y - nearY;
+//         if (dx * dx + dy * dy <= pr * pr) return true;
+//     }
+//     return false;
+// }
 function checkWallCollision(p, walls, doors) {
     const pr = PLAYER_R;
-    const allObstacles = walls.concat(doors.filter(d => !d.open));
-
-    for (let w of allObstacles) {
+    
+    // Optimisation : On boucle séparément pour éviter l'allocation d'un nouveau tableau via concat() à chaque tick
+    for (let w of walls) {
         const nearX = Math.max(w.x, Math.min(p.x, w.x + w.w));
         const nearY = Math.max(w.y, Math.min(p.y, w.y + w.h));
-        const dx    = p.x - nearX, dy = p.y - nearY;
+        const dx = p.x - nearX, dy = p.y - nearY;
+        if (dx * dx + dy * dy <= pr * pr) return true;
+    }
+    
+    for (let d of doors) {
+        if (d.open) continue; // Si la porte est ouverte, pas de collision
+        const nearX = Math.max(d.x, Math.min(p.x, d.x + d.w));
+        const nearY = Math.max(d.y, Math.min(p.y, d.y + d.h));
+        const dx = p.x - nearX, dy = p.y - nearY;
         if (dx * dx + dy * dy <= pr * pr) return true;
     }
     return false;
