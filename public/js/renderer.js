@@ -68,29 +68,25 @@ function drawSprite(anim, cx, cy, size) {
     return true;
 }
 
-// ── Génération de la matrice tilemap depuis le level ─────────────────
-// La matrice est recalculée à chaque nouveau niveau (levelId).
-let tileMatrix = null;   // tileMatrix[row][col] = T.xxx
-let tileAppearance = null; // pour le bitmask mur autotile
-let matrixW = 0, matrixH = 0;
-let currentLevelId = null;
+// ── Tilemap – lecture directe de level.geometrie ─────────────────────
+// Plus de buildMatrix intermédiaire : on lit la grille brute à chaque frame.
+let tileAppearance = null;  // bitmask précalculé à chaque nouveau niveau
+let lastGeometrie = null;   // référence pour détecter un changement de niveau
 
-function buildMatrix(level) {
-    if (!level.geometrie) return;
-    tileMatrix = level.geometrie;
-    matrixH = tileMatrix.length;
-    matrixW = tileMatrix[0].length;
-    computeAutotile();
-}
-
-// Calcule le bitmask autotile pour chaque tuile MUR (même algo que le jeu source)
-// Voisins : haut=1, gauche=2, droite=4, bas=8
-function computeAutotile() {
-    tileAppearance = Array.from({ length: matrixH }, () => new Array(matrixW).fill(0));
-    const isWall = (r, c) => r >= 0 && r < matrixH && c >= 0 && c < matrixW && tileMatrix[r][c] === T.MUR;
-    for (let r = 0; r < matrixH; r++) {
-        for (let c = 0; c < matrixW; c++) {
-            if (tileMatrix[r][c] !== T.MUR) continue;
+// Précalcule le bitmask autotile de chaque MUR dans la géométrie.
+// Les bords hors-grille comptent comme des murs (comportement original).
+function computeAutotile(matrice) {
+    const rows = matrice.length;
+    const cols = matrice[0].length;
+    // isWall : hors-grille = mur, dans la grille = ID 6
+    const isWall = (r, c) => {
+        if (r < 0 || r >= rows || c < 0 || c >= cols) return true;
+        return matrice[r][c] === T.MUR;
+    };
+    tileAppearance = Array.from({ length: rows }, () => new Array(cols).fill(0));
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            if (matrice[r][c] !== T.MUR) continue;
             // Bitmask 4 voisins : Haut=1, Gauche=2, Droite=4, Bas=8
             let bitmask = 0;
             if (isWall(r - 1, c)) bitmask += 1; // Haut
@@ -103,12 +99,23 @@ function computeAutotile() {
 }
 
 // ── Rendu de la tilemap ───────────────────────────────────────────────
-function renderTilemap(doors) {
-    if (!tileMatrix) return;
+function renderTilemap(level) {
+    const matrice = level.geometrie;
+    if (!matrice) return;
 
-    // Portes fermées (bloquées pour le rendu)
+    // Recalcule le bitmask si la géométrie a changé (nouveau niveau)
+    if (matrice !== lastGeometrie) {
+        computeAutotile(matrice);
+        lastGeometrie = matrice;
+        cachedSegments = null; // invalide le cache fog
+    }
+
+    const rows = matrice.length;
+    const cols = matrice[0].length;
+
+    // Ensemble des cases occupées par des portes fermées
     const doorSet = new Set();
-    for (const d of doors) {
+    for (const d of level.doors) {
         if (!d.open) {
             const c0 = Math.floor(d.x / TILE), r0 = Math.floor(d.y / TILE);
             const c1 = Math.ceil((d.x + d.w) / TILE), r1 = Math.ceil((d.y + d.h) / TILE);
@@ -121,28 +128,37 @@ function renderTilemap(doors) {
     const feuilleOk = imgFeuille.complete && imgFeuille.naturalWidth > 0;
     const herbeOk = imgHerbe.complete && imgHerbe.naturalWidth > 0;
 
-    for (let r = 0; r < matrixH; r++) {
-        for (let c = 0; c < matrixW; c++) {
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
             const px = c * TILE, py = r * TILE;
-            const id = tileMatrix[r][c];
+            const id = matrice[r][c];
             const isDoor = doorSet.has(`${r},${c}`);
-            const isWall = id === T.MUR || isDoor;
 
-            // 1. Dessiner le sol par défaut dessous (si ce n'est pas un mur plein)
-            if (herbeOk && !isWall) {
-                ctx.drawImage(imgHerbe, px, py, TILE, TILE);
-            }
-
-            // 2. Dessiner le Mur (Autotiling)
-            if (isWall) {
+            if (id === T.HERBE || id === T.SPAWN) {
+                // Sol (herbe)
+                if (herbeOk) {
+                    ctx.drawImage(imgHerbe, 0, 0, imgHerbe.naturalWidth, imgHerbe.naturalHeight, px, py, TILE, TILE);
+                } else {
+                    ctx.fillStyle = '#1a2a1e';
+                    ctx.fillRect(px, py, TILE, TILE);
+                }
+            } else if (id === T.MUR || isDoor) {
+                // Mur autotile depuis feuille.png (ligne 2, y = 1*TILE)
                 const bitmask = isDoor ? 0 : (tileAppearance[r][c] || 0);
                 const srcX = bitmask * TILE;
-                const srcY = 1 * TILE; // 2ème ligne de feuille.png
-
+                const srcY = 1 * TILE;
                 if (feuilleOk) {
                     ctx.drawImage(imgFeuille, srcX, srcY, TILE, TILE, px, py, TILE, TILE);
                 } else {
                     ctx.fillStyle = isDoor ? '#7f3030' : '#2a2a3a';
+                    ctx.fillRect(px, py, TILE, TILE);
+                }
+            } else {
+                // Autres IDs (porte ouverte, piège, pièce, sortie...) → fond herbe
+                if (herbeOk) {
+                    ctx.drawImage(imgHerbe, 0, 0, imgHerbe.naturalWidth, imgHerbe.naturalHeight, px, py, TILE, TILE);
+                } else {
+                    ctx.fillStyle = '#1a2a1e';
                     ctx.fillRect(px, py, TILE, TILE);
                 }
             }
@@ -197,8 +213,20 @@ function buildSegments(level) {
         segs.push({ a: { x: x + w, y: y + h }, b: { x, y: y + h } });
         segs.push({ a: { x, y: y + h }, b: { x, y } });
     };
+    // Bordure extérieure de la map
     addRect(0, 0, level.width, level.height);
-    for (const w of level.walls) addRect(w.x - 0.1, w.y - 0.1, w.w + 0.2, w.h + 0.2);
+    // Murs depuis la géométrie (ID 6)
+    if (level.geometrie) {
+        const matrice = level.geometrie;
+        for (let r = 0; r < matrice.length; r++) {
+            for (let c = 0; c < matrice[0].length; c++) {
+                if (matrice[r][c] === T.MUR) {
+                    addRect(c * TILE - 0.1, r * TILE - 0.1, TILE + 0.2, TILE + 0.2);
+                }
+            }
+        }
+    }
+    // Portes fermées
     for (const d of level.doors) if (!d.open) addRect(d.x - 0.1, d.y - 0.1, d.w + 0.2, d.h + 0.2);
     return segs;
 }
@@ -575,13 +603,6 @@ socket.emit('createGame', { pseudo: new URLSearchParams(window.location.search).
 socket.on('stateUpdate', (state) => {
     gameState = state;
 
-    // Rebuild tilemap if level changed
-    if (state.level && state.level !== lastLevelId) {
-        buildMatrix(state.level);
-        lastLevelId = state.level;
-        cachedSegments = null; // invalidate fog cache
-    }
-
     // Lobby / Victory UI
     if (state.status === 'lobby' || state.status === 'defeat') {
         if (lobbyUI) lobbyUI.style.display = 'flex';
@@ -632,8 +653,7 @@ function draw() {
         stopWalk(); requestAnimationFrame(draw); return;
     }
 
-    // Rebuild matrix if needed (first frame after start)
-    if (!tileMatrix) buildMatrix(level);
+    // (Plus besoin de buildMatrix – renderTilemap lit level.geometrie directement)
 
     updateCamera(level, players);
 
@@ -648,7 +668,7 @@ function draw() {
     ctx.translate(-camera.x, -camera.y);
 
     // 1. Tilemap (sol + murs)
-    renderTilemap(level.doors);
+    renderTilemap(level);
 
     // 2. Labels de salles
     if (level.rooms) {
