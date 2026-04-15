@@ -368,7 +368,8 @@
             fogCtx.save();
             fogCtx.translate(cx, cy);
             fogCtx.scale(camera.scale, camera.scale);
-            fogCtx.translate(-Math.floor(camera.x), -Math.floor(camera.y));
+            // fogCtx.translate(-Math.floor(camera.x), -Math.floor(camera.y));
+            fogCtx.translate(-camera.x, -camera.y);
 
             fogCtx.beginPath();
             fogCtx.moveTo(poly[0].x, poly[0].y);
@@ -405,11 +406,15 @@
             ts = Math.min(canvas.width / bw, canvas.height / bh, 1.4);
             ts = Math.max(ts, 0.2);
         }
-        camera.x += (tx - camera.x) * 0.1;
-        camera.y += (ty - camera.y) * 0.1;
-        camera.scale += (ts - camera.scale) * 0.1;
-        // Évite les micro-tremblements du scale
-        camera.scale = Math.round(camera.scale * 1000) / 1000;
+        const lerpSpeed = 0.1;
+
+        camera.x += (tx - camera.x) * lerpSpeed;
+        camera.y += (ty - camera.y) * lerpSpeed;
+        camera.scale += (ts - camera.scale) * lerpSpeed;
+        
+        if (Math.abs(tx - camera.x) < 0.5) camera.x = tx;
+        if (Math.abs(ty - camera.y) < 0.5) camera.y = ty;
+        if (Math.abs(ts - camera.scale) < 0.001) camera.scale = ts;
     }
 
     // ── FRUSTUM CULLING – AABB 2D ───────────────────────────────────────
@@ -924,7 +929,8 @@
         ctx.save();
         ctx.translate(cx, cy);
         ctx.scale(camera.scale, camera.scale);
-        ctx.translate(-Math.floor(camera.x), -Math.floor(camera.y));
+        // ctx.translate(-Math.floor(camera.x), -Math.floor(camera.y));
+        ctx.translate(-camera.x, -camera.y);
 
         // 1. Tilemap (Sol + Murs de base)
         renderTilemap(level, 'sol');
