@@ -6,7 +6,6 @@ const MAX_HP = 4;
 
 /**
  * Spatial Hash Grid for O(1) Lookups.
- * Réduit la complexité des collisions de O(N*M) à quasi O(1).
  */
 class SpatialHashGrid {
     constructor(width, height, cellSize) {
@@ -108,7 +107,7 @@ function construireSalleSortie(matrice, cx, cy) {
 }
 
 function generateLevel(playerCount) {
-    const ID_SOL = 1, ID_PORTE = 2, ID_DEPART = 3, ID_SORTIE = 4, ID_PIEGE = 5, ID_MUR = 6, ID_PLAQUE = 8, ID_COEUR = 9;
+    const ID_SOL = 1, ID_PORTE = 2, ID_DEPART = 3, ID_SORTIE = 4, ID_PIEGE = 5, ID_MUR = 6, ID_PLAQUE = 8;
     const tailleH = 12 + (playerCount * 2);
     const tailleL = largeurCalculée(tailleH);
     let matrice = Array.from({ length: tailleH }, (_, y) => 
@@ -189,9 +188,11 @@ function generateLevel(playerCount) {
 
 function refreshGrid(level) {
     level.grid.clear();
+    // OPTIMISATION : On intègre tout sans se soucier du statut "collected"
+    // Ils seront ignorés à la volée pendant le jeu au lieu de reconstruire la grille.
     level.buttons.forEach(b => { b.type = 'button'; level.grid.insert(b); });
-    level.coins.forEach(c => { if (!c.collected) { c.type = 'coin'; level.grid.insert(c); } });
-    level.hearts.forEach(h => { if (!h.collected) { h.type = 'heart'; level.grid.insert(h); } });
+    level.coins.forEach(c => { c.type = 'coin'; level.grid.insert(c); });
+    level.hearts.forEach(h => { h.type = 'heart'; level.grid.insert(h); });
     level.traps.forEach(t => { t.type = 'trap'; level.grid.insert(t); });
 }
 
@@ -218,40 +219,47 @@ function checkWallCollision(p, level) {
 function applyPhysics(player, level, dt) {
     if (player.isDead) return;
     if (player.invuln > 0) player.invuln = Math.max(0, player.invuln - dt * 60);
+    
+    // OPTIMISATION : On saute le traitement physique lourd si le joueur ne bouge pas
+    if (!player.vx && !player.vy) return;
+
     const SPEED = 5 * dt * 60; // Normalisé à 60fps
     const oldX = player.x, oldY = player.y;
+    
     player.x += (player.vx || 0) * SPEED;
     if (checkWallCollision(player, level)) player.x = oldX;
+    
     player.y += (player.vy || 0) * SPEED;
     if (checkWallCollision(player, level)) player.y = oldY;
 }
 
 function updateTriggers(players, level) {
     level.buttons.forEach(b => { if (!b.sticky || !b.pressed) b.pressed = false; b.currentCount = 0; });
-    const pList = Object.values(players);
-    let collectedChanged = false;
-
-    for (let p of pList) {
+    
+    for (let pId in players) {
+        const p = players[pId];
         if (p.isDead) continue;
+        
         const nearby = level.grid.getNearby(p.x, p.y, 60);
         for (let ent of nearby) {
+            // OPTIMISATION : on ignore les entités déjà ramassées à la volée.
+            if (ent.collected) continue; 
+
             const dSq = getDistSq(p, ent);
             if (ent.type === 'button') {
                 if (dSq < (ent.r + PLAYER_R)**2) {
                     ent.currentCount++;
                     if (ent.currentCount >= ent.reqCount) ent.pressed = true;
                 }
-            } else if (ent.type === 'coin' && !ent.collected) {
-                if (dSq < 35 * 35) { ent.collected = true; collectedChanged = true; }
-            } else if (ent.type === 'heart' && !ent.collected) {
-                if (dSq < 35 * 35) { ent.collected = true; p.hp = Math.min(MAX_HP, p.hp + 1); collectedChanged = true; }
+            } else if (ent.type === 'coin') {
+                if (dSq < 35 * 35) { ent.collected = true; } // Plus de refreshGrid coûteux
+            } else if (ent.type === 'heart') {
+                if (dSq < 35 * 35) { ent.collected = true; p.hp = Math.min(MAX_HP, p.hp + 1); }
             } else if (ent.type === 'trap' && p.invuln <= 0) {
                 if (dSq < (20 + PLAYER_R)**2) { p.hp -= 1; p.invuln = 90; if (p.hp <= 0) p.isDead = true; }
             }
         }
     }
-
-    if (collectedChanged) refreshGrid(level);
 
     level.doors.forEach(d => { const btn = level.buttons.find(b => b.id === d.linkedButton); d.open = btn ? btn.pressed : false; });
     const btn2 = level.buttons.find(b => b.id === 2);
@@ -261,6 +269,7 @@ function updateTriggers(players, level) {
     if (qBtn1) qBtn1.done = level.buttons.find(b => b.id === 1)?.pressed || false;
     const qBtn2 = level.quests.find(q => q.id === "btn2");
     if (qBtn2) qBtn2.done = level.buttons.find(b => b.id === 2)?.pressed || false;
+    
     const qCoins = level.quests.find(q => q.id === "coins");
     if (qCoins) {
         const count = level.coins.filter(c => c.collected).length;
@@ -290,12 +299,16 @@ function assignerSpawnsJoueurs(level, players) {
     if (!matrice) return;
     let sC = Math.floor(level.spawnX / TILE), sR = Math.floor(level.spawnY / TILE);
     let free = [];
-    for (let r = sR - 2; r <= sR + 2; r++) {
-        for (let c = sC - 2; c <= sC + 2; c++) {
+    
+    // OPTIMISATION : Agrandit la taille de recherche de spawn proportionnellement aux nombres de joueurs (évite le glitch d'empilement)
+    const searchRadius = Math.ceil(Math.sqrt(pIds.length)) + 1;
+    for (let r = sR - searchRadius; r <= sR + searchRadius; r++) {
+        for (let c = sC - searchRadius; c <= sC + searchRadius; c++) {
             if (r >= 0 && r < matrice.length && c >= 0 && c < matrice[0].length && (matrice[r][c] === 1 || matrice[r][c] === 3)) 
                 free.push({ r, c });
         }
     }
+    
     free.sort(() => Math.random() - 0.5);
     pIds.forEach((id, i) => {
         const p = players[id];

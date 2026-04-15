@@ -693,16 +693,16 @@ function decompressPlayers(rawPlayers) {
         if (!Array.isArray(d)) { result[id] = d; continue; }
         result[id] = {
             id,
-            x:           d[0],
-            y:           d[1],
-            vx:          d[2],
-            vy:          d[3],
-            hp:          d[4],
-            isDead:      d[5] === 1,
-            invuln:      d[6],
+            x: d[0],
+            y: d[1],
+            vx: d[2],
+            vy: d[3],
+            hp: d[4],
+            isDead: d[5] === 1,
+            invuln: d[6],
             actionBlink: d[7],
-            color:       d[8],
-            pseudo:      d[9]
+            color: d[8],
+            pseudo: d[9]
         };
     }
     return result;
