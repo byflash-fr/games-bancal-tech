@@ -21,6 +21,9 @@ const fogCtx = fogCanvas.getContext('2d', { willReadFrequently: true });
 let cachedSegments = null;
 let lastDoorsState = "";
 
+const coinImg = new Image();
+coinImg.src = '/assets/images/piece.png';
+
 function cancelGame() {
     socket.emit('cancelGame');
 }
@@ -138,15 +141,24 @@ function draw() {
     }
 
     // Pièces
+    let frameIndex = Math.floor(Date.now() / 100) % 10;
     for(let c of gameState.level.coins) {
         if(!c.collected) {
-            ctx.fillStyle = '#f1c40f';
-            ctx.beginPath();
-            ctx.arc(c.x, c.y, 15, 0, Math.PI*2);
-            ctx.fill();
-            ctx.strokeStyle = '#f39c12';
-            ctx.lineWidth = 3;
-            ctx.stroke();
+            if (coinImg.complete && coinImg.width > 0) {
+                let frameW = coinImg.width / 10;
+                let frameH = coinImg.height;
+                let drawW = 32;
+                let drawH = 32;
+                ctx.drawImage(coinImg, frameIndex * frameW, 0, frameW, frameH, c.x - drawW/2, c.y - drawH/2, drawW, drawH);
+            } else {
+                ctx.fillStyle = '#f1c40f';
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, 15, 0, Math.PI*2);
+                ctx.fill();
+                ctx.strokeStyle = '#f39c12';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
         }
     }
 
