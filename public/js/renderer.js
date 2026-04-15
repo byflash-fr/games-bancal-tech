@@ -314,7 +314,7 @@ function drawFog(level, players) {
         fogCtx.save();
         fogCtx.translate(cx, cy);
         fogCtx.scale(camera.scale, camera.scale);
-        fogCtx.translate(-Math.floor(camera.x), -Math.floor(camera.y));
+        fogCtx.translate(-camera.x, -camera.y);
 
         fogCtx.beginPath();
         fogCtx.moveTo(poly[0].x, poly[0].y);
@@ -843,7 +843,7 @@ function draw() {
     ctx.save();
     ctx.translate(cx, cy);
     ctx.scale(camera.scale, camera.scale);
-    ctx.translate(-Math.floor(camera.x), -Math.floor(camera.y));
+    ctx.translate(-camera.x, -camera.y);
 
     // 1. Tilemap (Sol + Murs de base)
     renderTilemap(level, 'sol');
@@ -898,7 +898,7 @@ function draw() {
     ctx.save();
     ctx.translate(cx, cy);
     ctx.scale(camera.scale, camera.scale);
-    ctx.translate(-Math.floor(camera.x), -Math.floor(camera.y));
+    ctx.translate(-camera.x, -camera.y);
     
     // Rendu des murs "fantômes" par-dessus le fog (pour la lisibilité)
     ctx.globalAlpha = 0.4;

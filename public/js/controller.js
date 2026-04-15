@@ -150,6 +150,7 @@ socket.on('stateUpdate', (state) => {
 const joystickZone = document.getElementById('joystick-zone');
 const btnA = document.getElementById('btnA');
 const btnB = document.getElementById('btnB');
+joystickZone.style.touchAction = 'none';
 
 let joystickActive = false;
 let startX, startY;
@@ -169,6 +170,7 @@ uiJoystick.style.pointerEvents = 'none';
 joystickZone.appendChild(uiJoystick);
 
 joystickZone.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
     joystickActive = true;
     const rect = joystickZone.getBoundingClientRect();
     startX = e.clientX - rect.left;
@@ -180,6 +182,7 @@ joystickZone.addEventListener('pointerdown', (e) => {
 });
 
 joystickZone.addEventListener('pointermove', (e) => {
+    e.preventDefault();
     if (!joystickActive) return;
     const rect = joystickZone.getBoundingClientRect();
     let cx = e.clientX - rect.left;
