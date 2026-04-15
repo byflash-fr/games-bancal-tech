@@ -162,6 +162,28 @@ let lastInputSentAt = 0;
 let lastSentDx = 0;
 let lastSentDy = 0;
 
+function emitMoveInput(dx, dy) {
+    const now = Date.now();
+    const changedEnough = Math.abs(dx - lastSentDx) > INPUT_EPSILON || Math.abs(dy - lastSentDy) > INPUT_EPSILON;
+    if (!changedEnough) return;
+    if (now - lastInputSentAt < INPUT_SEND_INTERVAL_MS) return;
+
+    socket.emit('input', { type: 'move', dx, dy });
+    lastInputSentAt = now;
+    lastSentDx = dx;
+    lastSentDy = dy;
+}
+
+function emitStopIfMoving() {
+    const wasMoving = Math.abs(lastSentDx) > INPUT_EPSILON || Math.abs(lastSentDy) > INPUT_EPSILON;
+    if (!wasMoving) return;
+
+    socket.emit('input', { type: 'move', dx: 0, dy: 0 });
+    lastInputSentAt = Date.now();
+    lastSentDx = 0;
+    lastSentDy = 0;
+}
+
 // Create visual joystick knob
 uiJoystick = document.createElement('div');
 uiJoystick.style.width = '40px';
@@ -207,33 +229,19 @@ joystickZone.addEventListener('pointermove', (e) => {
     // Normalize coordinates -1 to 1 and throttle network traffic.
     const ndx = dx / MAX_RADIUS;
     const ndy = dy / MAX_RADIUS;
-    const now = Date.now();
-    const changedEnough = Math.abs(ndx - lastSentDx) > INPUT_EPSILON || Math.abs(ndy - lastSentDy) > INPUT_EPSILON;
-
-    if (changedEnough && now - lastInputSentAt >= INPUT_SEND_INTERVAL_MS) {
-        socket.emit('input', { type: 'move', dx: ndx, dy: ndy });
-        lastInputSentAt = now;
-        lastSentDx = ndx;
-        lastSentDy = ndy;
-    }
+    emitMoveInput(ndx, ndy);
 });
 
 joystickZone.addEventListener('pointerup', () => {
     joystickActive = false;
     uiJoystick.style.display = 'none';
-    socket.emit('input', { type: 'move', dx: 0, dy: 0 });
-    lastInputSentAt = Date.now();
-    lastSentDx = 0;
-    lastSentDy = 0;
+    emitStopIfMoving();
 });
 joystickZone.addEventListener('pointerleave', () => {
     if (joystickActive) {
         joystickActive = false;
         uiJoystick.style.display = 'none';
-        socket.emit('input', { type: 'move', dx: 0, dy: 0 });
-        lastInputSentAt = Date.now();
-        lastSentDx = 0;
-        lastSentDy = 0;
+        emitStopIfMoving();
     }
 });
 

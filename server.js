@@ -80,7 +80,27 @@ function markGameDirty(gameCode) {
     game.netDirty = true;
 }
 
-function buildDynamicState(gameState) {
+function buildCompressedPlayers(playersById) {
+    const compressedPlayers = {};
+    for (const id in playersById) {
+        const p = playersById[id];
+        compressedPlayers[id] = [
+            Math.round(p.x * 10) / 10,  // [0] x (1 décimale suffira)
+            Math.round(p.y * 10) / 10,  // [1] y
+            p.vx,                        // [2] vx
+            p.vy,                        // [3] vy
+            p.hp,                        // [4] hp
+            p.isDead ? 1 : 0,            // [5] isDead (booléen → 0/1)
+            p.invuln,                    // [6] invuln (ticks restants)
+            p.actionBlink,               // [7] actionBlink
+            p.color,                     // [8] color (hex string, changé rarement)
+            p.pseudo                     // [9] pseudo
+        ];
+    }
+    return compressedPlayers;
+}
+
+function buildHostDynamicState(gameState) {
     const dynamicLevel = gameState.level ? {
         buttons: gameState.level.buttons,
         doors: gameState.level.doors,
@@ -96,31 +116,38 @@ function buildDynamicState(gameState) {
     // On évite les objets JSON lourds : chaque joueur est compressé
     // en un tableau compact [x, y, vx, vy, hp, isDead, invuln, actionBlink, color, pseudo].
     // La décompression se fait côté client dans stateUpdate.
-    const compressedPlayers = {};
-    for (const id in gameState.players) {
-        const p = gameState.players[id];
-        compressedPlayers[id] = [
-            Math.round(p.x * 10) / 10,  // [0] x (1 décimale suffira)
-            Math.round(p.y * 10) / 10,  // [1] y
-            p.vx,                        // [2] vx
-            p.vy,                        // [3] vy
-            p.hp,                        // [4] hp
-            p.isDead ? 1 : 0,            // [5] isDead (booléen → 0/1)
-            p.invuln,                    // [6] invuln (ticks restants)
-            p.actionBlink,               // [7] actionBlink
-            p.color,                     // [8] color (hex string, changé rarement)
-            p.pseudo                     // [9] pseudo
-        ];
-    }
-
     return {
         status: gameState.status,
         timeLeft: gameState.timeLeft,
         countdown: gameState.countdown,
-        players: compressedPlayers, // tableau compact au lieu d'objet
+        players: buildCompressedPlayers(gameState.players), // tableau compact au lieu d'objet
         level: dynamicLevel,
         _compressed: true  // marqueur pour que le client sache décompresser
     };
+}
+
+function buildPlayerDynamicState(gameState, playerId) {
+    const me = gameState.players[playerId];
+    return {
+        status: gameState.status,
+        timeLeft: gameState.timeLeft,
+        countdown: gameState.countdown,
+        players: me ? { [playerId]: me } : {}
+    };
+}
+
+function emitStateUpdate(gameCode, options = {}) {
+    const gameState = games[gameCode];
+    if (!gameState) return;
+
+    const hostPayload = options.hostFull ? gameState : buildHostDynamicState(gameState);
+    if (gameState.hostSocketId) {
+        io.to(gameState.hostSocketId).emit('stateUpdate', hostPayload);
+    }
+
+    for (const playerId in gameState.players) {
+        io.to(playerId).emit('stateUpdate', buildPlayerDynamicState(gameState, playerId));
+    }
 }
 
 io.on('connection', (socket) => {
@@ -134,6 +161,7 @@ io.on('connection', (socket) => {
         games[code] = {
             code: code,
             hostName: hostPseudo,
+            hostSocketId: socket.id,
             status: 'lobby',
             timeLeft: 300,
             players: {},
@@ -149,7 +177,7 @@ io.on('connection', (socket) => {
             if (!err) {
                 games[code].qrCodeDataUrl = url;
                 if (games[code]) {
-                    io.to(code).emit('stateUpdate', games[code]);
+                    emitStateUpdate(code, { hostFull: true });
                     markGameDirty(code);
                 }
             }
@@ -209,7 +237,7 @@ io.on('connection', (socket) => {
 
         // S'il s'est reconnecté, on arrête la fonction ici
         if (reconnected) {
-            io.to(code).emit('stateUpdate', game);
+            emitStateUpdate(code, { hostFull: true });
             markGameDirty(code);
             callback({ success: true, code: code });
             return;
@@ -253,7 +281,7 @@ io.on('connection', (socket) => {
             invuln: 0
         };
 
-        io.to(code).emit('stateUpdate', game);
+        emitStateUpdate(code, { hostFull: true });
         markGameDirty(code);
         callback({ success: true, code: code });
         console.log(`Player ${playerPseudo} joined ${code}`);
@@ -273,7 +301,7 @@ io.on('connection', (socket) => {
                 game.status = 'starting';
                 game.countdown = 5;
                 game.level = gameLogic.generateLevel(playerCount);
-                io.to(code).emit('stateUpdate', game);
+                emitStateUpdate(code, { hostFull: true });
                 markGameDirty(code);
             }
         }
@@ -310,7 +338,7 @@ io.on('connection', (socket) => {
             p.actionBlink = 0;
         }
 
-        io.to(code).emit('stateUpdate', game);
+        emitStateUpdate(code, { hostFull: true });
         markGameDirty(code);
     });
 
@@ -367,12 +395,12 @@ io.on('connection', (socket) => {
                                 } else {
                                     // Sinon, on ajuste la difficulté pour ceux qui restent
                                     gameLogic.adjustDifficulty(games[code].level, currentPlayersCount);
-                                    io.to(code).emit('stateUpdate', games[code]);
+                                    emitStateUpdate(code, { hostFull: true });
                                     markGameDirty(code);
                                     console.log(`Game ${code} dynamically adjusted for ${currentPlayersCount} players.`);
                                 }
                             } else {
-                                io.to(code).emit('stateUpdate', games[code]);
+                                emitStateUpdate(code, { hostFull: true });
                                 markGameDirty(code);
                             }
                         }
@@ -429,7 +457,7 @@ setInterval(() => {
         if (gameState.netElapsed >= NETWORK_TICK_RATE) {
             const shouldEmit = gameState.netDirty || gameState.netForceElapsed >= FORCE_SYNC_RATE;
             if (shouldEmit) {
-                io.to(code).emit('stateUpdate', buildDynamicState(gameState));
+                emitStateUpdate(code);
                 gameState.netDirty = false;
                 gameState.netForceElapsed = 0;
             }
