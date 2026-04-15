@@ -99,7 +99,7 @@ function computeAutotile(matrice) {
 }
 
 // ── Rendu de la tilemap ───────────────────────────────────────────────
-function renderTilemap(level) {
+function renderTilemap(level, layerType) {
     const matrice = level.geometrie;
     if (!matrice) return;
 
@@ -132,32 +132,37 @@ function renderTilemap(level) {
             const id = matrice[r][c];
             const isDoor = doorSet.has(`${r},${c}`);
 
-            if (id === T.HERBE || id === T.SPAWN) {
-                // Sol standard (première case de feuille.png)
-                if (feuilleOk) {
-                    ctx.drawImage(imgFeuille, 0, 0, TILE, TILE, px, py, TILE, TILE);
-                } else {
-                    ctx.fillStyle = '#0a0a0a';
-                    ctx.fillRect(px, py, TILE, TILE);
+            if (layerType === 'sol') {
+                if (id === T.HERBE || id === T.SPAWN) {
+                    // Sol standard (première case de feuille.png)
+                    if (feuilleOk) {
+                        ctx.drawImage(imgFeuille, 0, 0, TILE, TILE, px, py, TILE, TILE);
+                    } else {
+                        ctx.fillStyle = '#0a0a0a';
+                        ctx.fillRect(px, py, TILE, TILE);
+                    }
+                } else if (id !== T.MUR && !isDoor) {
+                    // Autres IDs au sol (porte ouverte, piège, pièce, sortie...) → fond sol standard
+                    if (feuilleOk) {
+                        ctx.drawImage(imgFeuille, 0, 0, TILE, TILE, px, py, TILE, TILE);
+                    } else {
+                        ctx.fillStyle = '#0a0a0a';
+                        ctx.fillRect(px, py, TILE, TILE);
+                    }
                 }
-            } else if (id === T.MUR || isDoor) {
-                // Mur autotile depuis feuille.png (ligne 3, y = 2*TILE pour les murs dorés)
-                const bitmask = isDoor ? 0 : (tileAppearance[r][c] || 0);
-                const srcX = bitmask * TILE;
-                const srcY = 2 * TILE; 
-                if (feuilleOk) {
-                    ctx.drawImage(imgFeuille, srcX, srcY, TILE, TILE, px, py, TILE, TILE);
-                } else {
-                    ctx.fillStyle = isDoor ? '#7f3030' : '#2a2a3a';
-                    ctx.fillRect(px, py, TILE, TILE);
-                }
-            } else {
-                // Autres IDs (porte ouverte, piège, pièce, sortie...) → fond sol standard
-                if (feuilleOk) {
-                    ctx.drawImage(imgFeuille, 0, 0, TILE, TILE, px, py, TILE, TILE);
-                } else {
-                    ctx.fillStyle = '#0a0a0a';
-                    ctx.fillRect(px, py, TILE, TILE);
+            } 
+            else if (layerType === 'murs') {
+                if (id === T.MUR || isDoor) {
+                    // Mur autotile depuis feuille.png (ligne 3, y = 2*TILE pour les murs dorés)
+                    const bitmask = isDoor ? 0 : (tileAppearance[r][c] || 0);
+                    const srcX = bitmask * TILE;
+                    const srcY = 2 * TILE; 
+                    if (feuilleOk) {
+                        ctx.drawImage(imgFeuille, srcX, srcY, TILE, TILE, px, py, TILE, TILE);
+                    } else {
+                        ctx.fillStyle = isDoor ? '#7f3030' : '#2a2a3a';
+                        ctx.fillRect(px, py, TILE, TILE);
+                    }
                 }
             }
         }
@@ -665,8 +670,9 @@ function draw() {
     ctx.scale(camera.scale, camera.scale);
     ctx.translate(-camera.x, -camera.y);
 
-    // 1. Tilemap (sol + murs)
-    renderTilemap(level);
+    // 1. Tilemap (Sol + Murs de base)
+    renderTilemap(level, 'sol');
+    renderTilemap(level, 'murs');
 
     // 2. Labels de salles
     if (level.rooms) {
@@ -715,6 +721,12 @@ function draw() {
     ctx.translate(canvas.width / 2, canvas.height / 2);
     ctx.scale(camera.scale, camera.scale);
     ctx.translate(-camera.x, -camera.y);
+    
+    // Rendu des murs "fantômes" par-dessus le fog (pour la lisibilité)
+    ctx.globalAlpha = 0.4;
+    renderTilemap(level, 'murs');
+    ctx.globalAlpha = 1.0;
+
     drawDoors(level.doors, level.buttons);
     ctx.restore();
 
