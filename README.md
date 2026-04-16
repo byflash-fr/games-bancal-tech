@@ -33,7 +33,7 @@ L'architecture technique repose sur un modèle Client-Serveur centralisé conçu
 ## 👥 Équipe et Organisation
 Projet conçu et développé par le groupe **TP4F-4G** :
 * Ahmed Ashry
-* Paul Betinelli
+* Paul
 * Walid Boussaa
 * Thai Son Hoang
 
