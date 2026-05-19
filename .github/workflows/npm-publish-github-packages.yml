@@ -1,0 +1,39 @@
+name: Déploiement Bancal Game
+
+on:
+  push:
+    branches: [ "main" ]
+  # Si vous préférez déclencher la mise en ligne uniquement 
+  # lors de la création d'une release, décommentez les lignes ci-dessous :
+  # release:
+  #   types: [created]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      # - run: npm test (Commenté car il n'y a pas encore de script "test" dans le package.json)
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Déploiement sur le serveur via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            # Commandes exécutées sur le serveur d'hébergement
+            cd /chemin/vers/votre/dossier/games-bancal-tech
+            git pull origin main
+            npm ci --omit=dev
+            
+            # Relancer l'application Node.js (à adapter selon votre gestionnaire)
+            pm2 restart bancal-game || systemctl restart bancal
